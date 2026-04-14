@@ -74,6 +74,7 @@ AGENTS.md
 # Internal design notes kept out of the public repository
 docs/base_principles.md
 docs/*analysis*.md
+docs/*alignment*.md
 docs/*architecture_proposal*.md
 docs/*development_roadmap*.md
 docs/*user_interaction_design*.md
