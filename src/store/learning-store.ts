@@ -92,6 +92,10 @@ export class LearningStore {
       content: params.content,
       state: params.state,
       confidence: params.confidence,
+      successfulRecalls: state.memories[params.id]?.successfulRecalls ?? 0,
+      hitCount: state.memories[params.id]?.hitCount ?? 0,
+      lastRecallAt: state.memories[params.id]?.lastRecallAt,
+      lastOutcome: state.memories[params.id]?.lastOutcome,
       reviewId: params.reviewId,
       updatedAt: new Date().toISOString(),
     };
@@ -125,6 +129,26 @@ export class LearningStore {
 
   listCandidateMemories() {
     return Object.values(this.readState().memories).filter((memory) => memory.state === "candidate");
+  }
+
+  listEvolutionTraces() {
+    return fs
+      .readdirSync(this.paths.traceDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) =>
+        JSON.parse(
+          fs.readFileSync(path.join(this.paths.traceDir, entry.name), "utf8"),
+        ) as EvolutionTrace,
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
+  getEvolutionTrace(traceId: string) {
+    const filePath = path.join(this.paths.traceDir, `${traceId}.json`);
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    return JSON.parse(fs.readFileSync(filePath, "utf8")) as EvolutionTrace;
   }
 
   upsertSkillRecord(params: Omit<SkillRecord, "createdAt" | "updatedAt" | "patchHistory"> & {
@@ -257,7 +281,7 @@ export class LearningStore {
 
     const memories = Object.values(state.memories)
       .filter((memory) => memoryStates.includes(memory.state))
-      .sort(compareByConfidenceAndFreshness)
+      .sort(compareMemoriesForRecall)
       .slice(0, params.maxMemories)
       .map((memory) => ({
         id: memory.id,
@@ -297,22 +321,37 @@ export class LearningStore {
     const now = new Date().toISOString();
 
     for (const entry of entries) {
-      if (entry.assetKind !== "skill") {
+      if (entry.assetKind === "skill") {
+        const slug = entry.assetId.replace(/^skill:/u, "");
+        const skill = state.skills[slug];
+        if (!skill) {
+          continue;
+        }
+        skill.hitCount += 1;
+        skill.lastRecallAt = now;
+        skill.lastOutcome = entry.outcome;
+        if (entry.outcome === "success") {
+          skill.successfulRecalls += 1;
+        }
+        state.skills[slug] = {
+          ...skill,
+          updatedAt: now,
+        };
         continue;
       }
-      const slug = entry.assetId.replace(/^skill:/u, "");
-      const skill = state.skills[slug];
-      if (!skill) {
+      const memoryId = entry.assetId.replace(/^memory:/u, "memory:");
+      const memory = state.memories[memoryId];
+      if (!memory) {
         continue;
       }
-      skill.hitCount += 1;
-      skill.lastRecallAt = now;
-      skill.lastOutcome = entry.outcome;
+      memory.hitCount += 1;
+      memory.lastRecallAt = now;
+      memory.lastOutcome = entry.outcome;
       if (entry.outcome === "success") {
-        skill.successfulRecalls += 1;
+        memory.successfulRecalls += 1;
       }
-      state.skills[slug] = {
-        ...skill,
+      state.memories[memoryId] = {
+        ...memory,
         updatedAt: now,
       };
     }
@@ -601,6 +640,13 @@ function compareByConfidenceAndFreshness(left: { confidence: number; updatedAt?:
     return right.confidence - left.confidence;
   }
   return (right.updatedAt ?? "").localeCompare(left.updatedAt ?? "");
+}
+
+function compareMemoriesForRecall(left: MemoryRecord, right: MemoryRecord) {
+  if (right.successfulRecalls !== left.successfulRecalls) {
+    return right.successfulRecalls - left.successfulRecalls;
+  }
+  return compareByConfidenceAndFreshness(left, right);
 }
 
 function compareSkillsForRecall(left: SkillRecord, right: SkillRecord) {

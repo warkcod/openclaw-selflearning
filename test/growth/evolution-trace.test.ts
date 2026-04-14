@@ -57,4 +57,33 @@ describe("applyEvolutionTrace", () => {
     expect(skill?.hitCount).toBe(1);
     expect(skill?.lastOutcome).toBe("success");
   });
+
+  it("tracks memory usage outcomes as well", () => {
+    store.upsertMemoryRecord({
+      id: "memory:default-channel",
+      kind: "durable-memory",
+      title: "Default follow-up channel",
+      content: "The user prefers Telegram follow-ups.",
+      state: "promoted",
+      confidence: 0.8,
+    });
+
+    applyEvolutionTrace({
+      store,
+      sessionId: "session-2",
+      assetUsage: [
+        {
+          assetId: "memory:default-channel",
+          assetKind: "memory",
+          outcome: "success",
+          notes: "The preference shaped the reply routing choice.",
+        },
+      ],
+    });
+
+    const memory = store.getMemoryRecord("memory:default-channel");
+    expect(memory?.successfulRecalls).toBe(1);
+    expect(memory?.hitCount).toBe(1);
+    expect(memory?.lastOutcome).toBe("success");
+  });
 });

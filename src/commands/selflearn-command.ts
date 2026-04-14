@@ -32,6 +32,42 @@ export function createSelfLearningCommand(params: {
         return { text: lines.length > 0 ? lines.join("\n") : "No candidate memories." };
       }
 
+      if (subcommand === "traces") {
+        const traces = store.listEvolutionTraces();
+        if (traces.length === 0) {
+          return { text: "No evolution traces." };
+        }
+        return {
+          text: traces
+            .slice(0, 10)
+            .map((trace) => `${trace.traceId} | ${trace.sessionId} | ${trace.createdAt} | ${trace.entries.length} entries`)
+            .join("\n"),
+        };
+      }
+
+      if (subcommand === "trace") {
+        const traceId = rest[0];
+        if (!traceId) {
+          return { text: "Usage: /selflearn trace <trace-id>" };
+        }
+        const trace = store.getEvolutionTrace(traceId);
+        if (!trace) {
+          return { text: `Trace ${traceId} not found.` };
+        }
+        return {
+          text: [
+            `Trace ${trace.traceId}`,
+            `session: ${trace.sessionId}`,
+            `created: ${trace.createdAt}`,
+            "",
+            ...trace.entries.map(
+              (entry) =>
+                `${entry.assetId} | ${entry.outcome}${entry.notes ? ` | ${entry.notes}` : ""}`,
+            ),
+          ].join("\n"),
+        };
+      }
+
       if (subcommand === "show") {
         const slug = rest[0];
         if (!slug) {
@@ -209,6 +245,8 @@ export function createSelfLearningCommand(params: {
           "Usage:",
           "/selflearn queue",
           "/selflearn memories",
+          "/selflearn traces",
+          "/selflearn trace <trace-id>",
           "/selflearn show <skill-slug>",
           "/selflearn patches",
           "/selflearn learn --from current",

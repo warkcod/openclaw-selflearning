@@ -104,6 +104,71 @@ describe("createSelfLearningCommand", () => {
     expect(result.text).toContain("Default follow-up channel");
   });
 
+  it("lists evolution traces", async () => {
+    store.saveEvolutionTrace({
+      traceId: "trace-session-1",
+      sessionId: "session-1",
+      createdAt: "2026-04-14T12:00:00.000Z",
+      entries: [
+        {
+          assetId: "skill:customer-onboarding-checklist",
+          assetKind: "skill",
+          outcome: "success",
+          notes: "The checklist guided the sequence.",
+        },
+      ],
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn traces",
+        args: "traces",
+      }),
+    );
+
+    expect(result.text).toContain("trace-session-1");
+    expect(result.text).toContain("session-1");
+  });
+
+  it("shows a single evolution trace", async () => {
+    store.saveEvolutionTrace({
+      traceId: "trace-session-1",
+      sessionId: "session-1",
+      createdAt: "2026-04-14T12:00:00.000Z",
+      entries: [
+        {
+          assetId: "skill:customer-onboarding-checklist",
+          assetKind: "skill",
+          outcome: "success",
+          notes: "The checklist guided the sequence.",
+        },
+      ],
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn trace trace-session-1",
+        args: "trace trace-session-1",
+      }),
+    );
+
+    expect(result.text).toContain("Trace trace-session-1");
+    expect(result.text).toContain("skill:customer-onboarding-checklist");
+    expect(result.text).toContain("success");
+  });
+
   it("delegates explicit learning from the current conversation", async () => {
     const learnCurrentConversation = vi.fn().mockResolvedValue({
       slug: "customer-onboarding-checklist",

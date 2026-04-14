@@ -17,6 +17,10 @@ export type MemoryRecord = {
   content: string;
   state: MemoryRecordState;
   confidence: number;
+  successfulRecalls: number;
+  hitCount: number;
+  lastRecallAt?: string;
+  lastOutcome?: RecallOutcome;
   reviewId?: string;
   updatedAt: string;
 };
