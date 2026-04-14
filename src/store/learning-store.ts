@@ -94,8 +94,13 @@ export class LearningStore {
       confidence: params.confidence,
       successfulRecalls: state.memories[params.id]?.successfulRecalls ?? 0,
       hitCount: state.memories[params.id]?.hitCount ?? 0,
+      failureCount: state.memories[params.id]?.failureCount ?? 0,
+      userCorrectionCount: state.memories[params.id]?.userCorrectionCount ?? 0,
       lastRecallAt: state.memories[params.id]?.lastRecallAt,
       lastOutcome: state.memories[params.id]?.lastOutcome,
+      suppressed: state.memories[params.id]?.suppressed ?? false,
+      suppressedAt: state.memories[params.id]?.suppressedAt,
+      suppressionReason: state.memories[params.id]?.suppressionReason,
       reviewId: params.reviewId,
       updatedAt: new Date().toISOString(),
     };
@@ -164,6 +169,11 @@ export class LearningStore {
       createdAt: params.createdAt ?? existing?.createdAt ?? new Date().toISOString(),
       updatedAt: params.updatedAt ?? new Date().toISOString(),
       patchHistory: params.patchHistory ?? existing?.patchHistory ?? [],
+      failureCount: params.failureCount ?? existing?.failureCount ?? 0,
+      userCorrectionCount: params.userCorrectionCount ?? existing?.userCorrectionCount ?? 0,
+      suppressed: params.suppressed ?? existing?.suppressed ?? false,
+      suppressedAt: params.suppressedAt ?? existing?.suppressedAt,
+      suppressionReason: params.suppressionReason ?? existing?.suppressionReason,
     };
     state.skills[params.slug] = record;
     this.writeState(state);
@@ -280,7 +290,7 @@ export class LearningStore {
       : ["promoted"];
 
     const memories = Object.values(state.memories)
-      .filter((memory) => memoryStates.includes(memory.state))
+      .filter((memory) => memoryStates.includes(memory.state) && memory.suppressed !== true)
       .sort(compareMemoriesForRecall)
       .slice(0, params.maxMemories)
       .map((memory) => ({
@@ -292,7 +302,7 @@ export class LearningStore {
       }));
 
     const skills = Object.values(state.skills)
-      .filter((skill) => skillStates.includes(skill.state))
+      .filter((skill) => skillStates.includes(skill.state) && skill.suppressed !== true)
       .sort(compareSkillsForRecall)
       .slice(0, params.maxSkills)
       .map((skill) => ({
@@ -359,6 +369,37 @@ export class LearningStore {
     this.writeState(state);
   }
 
+  applyLifecyclePolicy(entry: EvolutionTraceEntry, options?: { countUsage?: boolean }) {
+    const state = this.readState();
+    const now = new Date().toISOString();
+    const countUsage = options?.countUsage ?? true;
+
+    if (entry.assetKind === "skill") {
+      const slug = entry.assetId.replace(/^skill:/u, "");
+      const skill = state.skills[slug];
+      if (!skill) {
+        return;
+      }
+      updateLifecycleCounters(skill, entry, now, countUsage);
+      applyLifecycleStateTransitions(skill);
+      state.skills[slug] = { ...skill, updatedAt: now };
+      this.writeState(state);
+      this.syncManifestFromState(state);
+      return;
+    }
+
+    const memoryId = entry.assetId.replace(/^memory:/u, "memory:");
+    const memory = state.memories[memoryId];
+    if (!memory) {
+      return;
+    }
+    updateLifecycleCounters(memory, entry, now, countUsage);
+    applyMemoryLifecycleStateTransitions(memory);
+    state.memories[memoryId] = { ...memory, updatedAt: now };
+    this.writeState(state);
+    this.syncManifestFromState(state);
+  }
+
   setSkillReviewDecision(slug: string, decision: "approved" | "rejected" | "candidate") {
     const state = this.readState();
     const skill = state.skills[slug];
@@ -394,6 +435,39 @@ export class LearningStore {
       decision === "approved" ? "promoted" : decision === "rejected" ? "deprecated" : "candidate";
     memory.updatedAt = new Date().toISOString();
     state.memories[id] = memory;
+    this.writeState(state);
+    this.syncManifestFromState(state);
+    return true;
+  }
+
+  suppressSkill(slug: string, reason = "manual") {
+    const state = this.readState();
+    const skill = state.skills[slug];
+    if (!skill) {
+      return false;
+    }
+    skill.suppressed = true;
+    skill.suppressedAt = new Date().toISOString();
+    skill.suppressionReason = reason;
+    skill.updatedAt = new Date().toISOString();
+    state.skills[slug] = skill;
+    this.writeState(state);
+    return true;
+  }
+
+  repromoteSkill(slug: string) {
+    const state = this.readState();
+    const skill = state.skills[slug];
+    if (!skill) {
+      return false;
+    }
+    skill.state = "promoted";
+    skill.suppressed = false;
+    skill.suppressedAt = undefined;
+    skill.suppressionReason = undefined;
+    skill.promotedAt = new Date().toISOString();
+    skill.updatedAt = new Date().toISOString();
+    state.skills[slug] = skill;
     this.writeState(state);
     this.syncManifestFromState(state);
     return true;
@@ -607,6 +681,67 @@ export class LearningStore {
 
 function safeFileName(value: string) {
   return value.replace(/[^a-z0-9._-]+/giu, "-");
+}
+
+function updateLifecycleCounters(
+  asset: {
+    successfulRecalls: number;
+    failureCount?: number;
+    userCorrectionCount?: number;
+    lastRecallAt?: string;
+    lastOutcome?: string;
+    suppressed?: boolean;
+    suppressedAt?: string;
+    suppressionReason?: string;
+  },
+  entry: EvolutionTraceEntry,
+  now: string,
+  countUsage: boolean,
+) {
+  asset.lastRecallAt = now;
+  asset.lastOutcome = entry.outcome;
+  asset.failureCount = asset.failureCount ?? 0;
+  asset.userCorrectionCount = asset.userCorrectionCount ?? 0;
+
+  if (entry.outcome === "success" && countUsage) {
+    asset.successfulRecalls += 1;
+    asset.failureCount = 0;
+  }
+  if (entry.outcome === "failure") {
+    asset.failureCount += 1;
+  }
+  if (entry.outcome === "user_corrected") {
+    asset.userCorrectionCount += 1;
+  }
+}
+
+function applyLifecycleStateTransitions(
+  skill: SkillRecord,
+) {
+  if ((skill.userCorrectionCount ?? 0) >= 2) {
+    skill.suppressed = true;
+    skill.suppressedAt = new Date().toISOString();
+    skill.suppressionReason = "repeated-user-corrections";
+  }
+  if ((skill.failureCount ?? 0) >= 2 && skill.state === "promoted") {
+    skill.state = "stale";
+  }
+  if (skill.state === "stale" && skill.successfulRecalls >= 3) {
+    skill.state = "promoted";
+    skill.suppressed = false;
+    skill.suppressedAt = undefined;
+    skill.suppressionReason = undefined;
+  }
+}
+
+function applyMemoryLifecycleStateTransitions(
+  memory: MemoryRecord,
+) {
+  if ((memory.userCorrectionCount ?? 0) >= 2) {
+    memory.suppressed = true;
+    memory.suppressedAt = new Date().toISOString();
+    memory.suppressionReason = "repeated-user-corrections";
+  }
 }
 
 function resolveImportedAgentId(

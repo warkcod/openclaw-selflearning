@@ -305,4 +305,125 @@ describe("LearningStore", () => {
     expect(imported?.title).toBe("Imported Skill");
     expect(imported?.version).toBe(2);
   });
+
+  it("marks a promoted skill as stale after repeated failures", () => {
+    store.upsertSkillRecord({
+      slug: "customer-onboarding-checklist",
+      title: "Customer Onboarding Checklist",
+      summary: "Checklist for onboarding a customer",
+      state: "promoted",
+      origin: "selflearned",
+      ownership: "system",
+      reviewStatus: "approved",
+      confidence: 0.9,
+      successfulRecalls: 0,
+      hitCount: 0,
+      userModified: false,
+      version: 1,
+      content: "# Customer Onboarding Checklist",
+    });
+
+    store.applyLifecyclePolicy({
+      assetId: "skill:customer-onboarding-checklist",
+      assetKind: "skill",
+      outcome: "failure",
+    });
+    store.applyLifecyclePolicy({
+      assetId: "skill:customer-onboarding-checklist",
+      assetKind: "skill",
+      outcome: "failure",
+    });
+
+    const skill = store.getSkillRecord("customer-onboarding-checklist");
+    expect(skill?.state).toBe("stale");
+  });
+
+  it("suppresses a promoted skill after repeated user corrections", () => {
+    store.upsertSkillRecord({
+      slug: "customer-onboarding-checklist",
+      title: "Customer Onboarding Checklist",
+      summary: "Checklist for onboarding a customer",
+      state: "promoted",
+      origin: "selflearned",
+      ownership: "system",
+      reviewStatus: "approved",
+      confidence: 0.9,
+      successfulRecalls: 0,
+      hitCount: 0,
+      userModified: false,
+      version: 1,
+      content: "# Customer Onboarding Checklist",
+    });
+
+    store.applyLifecyclePolicy({
+      assetId: "skill:customer-onboarding-checklist",
+      assetKind: "skill",
+      outcome: "user_corrected",
+    });
+    store.applyLifecyclePolicy({
+      assetId: "skill:customer-onboarding-checklist",
+      assetKind: "skill",
+      outcome: "user_corrected",
+    });
+
+    const skill = store.getSkillRecord("customer-onboarding-checklist");
+    expect(skill?.suppressed).toBe(true);
+  });
+
+  it("re-promotes a stale skill after enough later successes", () => {
+    store.upsertSkillRecord({
+      slug: "customer-onboarding-checklist",
+      title: "Customer Onboarding Checklist",
+      summary: "Checklist for onboarding a customer",
+      state: "stale",
+      origin: "selflearned",
+      ownership: "system",
+      reviewStatus: "approved",
+      confidence: 0.9,
+      successfulRecalls: 1,
+      hitCount: 0,
+      userModified: false,
+      version: 1,
+      content: "# Customer Onboarding Checklist",
+    });
+
+    store.applyLifecyclePolicy({
+      assetId: "skill:customer-onboarding-checklist",
+      assetKind: "skill",
+      outcome: "success",
+    });
+    store.applyLifecyclePolicy({
+      assetId: "skill:customer-onboarding-checklist",
+      assetKind: "skill",
+      outcome: "success",
+    });
+
+    const skill = store.getSkillRecord("customer-onboarding-checklist");
+    expect(skill?.state).toBe("promoted");
+  });
+
+  it("suppresses a promoted memory after repeated user corrections", () => {
+    store.upsertMemoryRecord({
+      id: "memory:default-channel",
+      kind: "durable-memory",
+      title: "Default follow-up channel",
+      content: "The user prefers Telegram follow-ups.",
+      state: "promoted",
+      confidence: 0.8,
+    });
+
+    store.applyLifecyclePolicy({
+      assetId: "memory:default-channel",
+      assetKind: "memory",
+      outcome: "user_corrected",
+    });
+    store.applyLifecyclePolicy({
+      assetId: "memory:default-channel",
+      assetKind: "memory",
+      outcome: "user_corrected",
+    });
+
+    const memory = store.getMemoryRecord("memory:default-channel");
+    expect(memory?.suppressed).toBe(true);
+  });
 });

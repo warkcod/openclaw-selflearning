@@ -19,8 +19,13 @@ export type MemoryRecord = {
   confidence: number;
   successfulRecalls: number;
   hitCount: number;
+  failureCount?: number;
+  userCorrectionCount?: number;
   lastRecallAt?: string;
   lastOutcome?: RecallOutcome;
+  suppressed?: boolean;
+  suppressedAt?: string;
+  suppressionReason?: string;
   reviewId?: string;
   updatedAt: string;
 };
@@ -36,6 +41,8 @@ export type SkillRecord = {
   confidence: number;
   successfulRecalls: number;
   hitCount: number;
+  failureCount?: number;
+  userCorrectionCount?: number;
   userModified: boolean;
   version: number;
   content: string;
@@ -50,6 +57,9 @@ export type SkillRecord = {
   frozen?: boolean;
   lastRecallAt?: string;
   lastOutcome?: RecallOutcome;
+  suppressed?: boolean;
+  suppressedAt?: string;
+  suppressionReason?: string;
   patchTargetSkillId?: string;
   patchReason?: string;
   patchHistory: SkillPatchProposal[];

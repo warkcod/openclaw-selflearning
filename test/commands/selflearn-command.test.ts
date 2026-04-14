@@ -650,4 +650,75 @@ describe("createSelfLearningCommand", () => {
     expect(importResult.text).toContain("Imported");
     expect(importStore.getSkillRecord("customer-onboarding-checklist")?.agentId).toBe("alpha");
   });
+
+  it("suppresses a skill manually", async () => {
+    store.upsertSkillRecord({
+      slug: "customer-onboarding-checklist",
+      title: "Customer Onboarding Checklist",
+      summary: "Checklist for onboarding a customer",
+      state: "promoted",
+      origin: "selflearned",
+      ownership: "system",
+      reviewStatus: "approved",
+      confidence: 0.9,
+      successfulRecalls: 2,
+      hitCount: 3,
+      userModified: false,
+      version: 1,
+      content: "# Customer Onboarding Checklist\n\nUse this flow.",
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn suppress customer-onboarding-checklist",
+        args: "suppress customer-onboarding-checklist",
+      }),
+    );
+
+    expect(result.text).toContain("suppressed");
+    expect(store.getSkillRecord("customer-onboarding-checklist")?.suppressed).toBe(true);
+  });
+
+  it("re-promotes a skill manually", async () => {
+    store.upsertSkillRecord({
+      slug: "customer-onboarding-checklist",
+      title: "Customer Onboarding Checklist",
+      summary: "Checklist for onboarding a customer",
+      state: "stale",
+      origin: "selflearned",
+      ownership: "system",
+      reviewStatus: "approved",
+      confidence: 0.9,
+      successfulRecalls: 2,
+      hitCount: 3,
+      userModified: false,
+      version: 1,
+      suppressed: true,
+      content: "# Customer Onboarding Checklist\n\nUse this flow.",
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn repromote customer-onboarding-checklist",
+        args: "repromote customer-onboarding-checklist",
+      }),
+    );
+
+    const skill = store.getSkillRecord("customer-onboarding-checklist");
+    expect(result.text).toContain("re-promoted");
+    expect(skill?.state).toBe("promoted");
+    expect(skill?.suppressed).toBe(false);
+  });
 });

@@ -149,6 +149,24 @@ export function createSelfLearningCommand(params: {
         return { text: updated ? `Skill ${slug} rejected.` : `Skill ${slug} not found.` };
       }
 
+      if (subcommand === "suppress") {
+        const slug = rest[0];
+        if (!slug) {
+          return { text: "Usage: /selflearn suppress <skill-slug>" };
+        }
+        const updated = store.suppressSkill(slug);
+        return { text: updated ? `Skill ${slug} suppressed.` : `Skill ${slug} not found.` };
+      }
+
+      if (subcommand === "repromote") {
+        const slug = rest[0];
+        if (!slug) {
+          return { text: "Usage: /selflearn repromote <skill-slug>" };
+        }
+        const updated = store.repromoteSkill(slug);
+        return { text: updated ? `Skill ${slug} re-promoted.` : `Skill ${slug} not found.` };
+      }
+
       if (subcommand === "keep-candidate") {
         const slug = rest[0];
         if (!slug) {
@@ -258,6 +276,8 @@ export function createSelfLearningCommand(params: {
           "/selflearn reject-memory <memory-id>",
           "/selflearn keep-memory <memory-id>",
           "/selflearn reject <skill-slug>",
+          "/selflearn suppress <skill-slug>",
+          "/selflearn repromote <skill-slug>",
           "/selflearn keep-candidate <skill-slug>",
           "/selflearn reject-patch <proposal-id>",
           "/selflearn export [--include-candidates]",

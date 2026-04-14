@@ -29,6 +29,9 @@ export function applyEvolutionTrace(params: {
     entries: traceEntries,
   });
   params.store.applyAssetUsage(traceEntries);
+  for (const entry of traceEntries) {
+    params.store.applyLifecyclePolicy(entry, { countUsage: false });
+  }
 }
 
 export function formatTracePath(paths: LearningStorePaths, traceId: string): string {
