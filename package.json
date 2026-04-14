@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "A self-learning OpenClaw extension that turns completed work into durable memory and reusable skills.",
   "type": "module",
-  "license": "AGPL-3.0-or-later",
+  "license": "Apache-2.0",
   "private": false,
   "main": "./dist/src/index.js",
   "exports": {

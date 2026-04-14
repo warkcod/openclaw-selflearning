@@ -80,4 +80,4 @@ Internal design notes and Chinese planning documents are kept out of the public 
 
 ## License
 
-This repository currently uses `AGPL-3.0-or-later`.
+This repository currently uses `Apache-2.0`.
