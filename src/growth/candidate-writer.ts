@@ -72,6 +72,8 @@ export function applyReviewResult(params: {
       reason: decision.reason,
       mode: decision.kind,
       createdAt: new Date().toISOString(),
+      proposedSummary: candidate.summary,
+      proposedContent: candidate.content,
     });
   }
 }

@@ -45,6 +45,21 @@ export function createSelfLearningCommand(params: {
         };
       }
 
+      if (subcommand === "patches") {
+        const proposals = store.listPatchProposals();
+        if (proposals.length === 0) {
+          return { text: "No patch proposals." };
+        }
+        return {
+          text: proposals
+            .map(
+              (proposal) =>
+                `${proposal.proposalId} | ${proposal.targetSlug} | ${proposal.mode} | ${proposal.reason}`,
+            )
+            .join("\n"),
+        };
+      }
+
       if (subcommand === "approve") {
         const slug = rest[0];
         if (!slug) {
@@ -86,6 +101,19 @@ export function createSelfLearningCommand(params: {
         };
       }
 
+      if (subcommand === "apply-patch") {
+        const proposalId = rest[0];
+        if (!proposalId) {
+          return { text: "Usage: /selflearn apply-patch <proposal-id>" };
+        }
+        const updated = store.applyPatchProposal(proposalId);
+        return {
+          text: updated
+            ? `Applied patch proposal ${proposalId} to ${updated.slug}.`
+            : `Patch proposal ${proposalId} not found.`,
+        };
+      }
+
       if (subcommand === "learn") {
         if (rest[0] === "--from" && rest[1] === "current") {
           const result = await params.learnCurrentConversation({ sessionFile: ctx.sessionFile });
@@ -116,7 +144,11 @@ export function createSelfLearningCommand(params: {
           return { text: "Usage: /selflearn import <bundle-path> [--mode <mode>]" };
         }
         const bundle = JSON.parse(fs.readFileSync(resolveInputPath(bundlePath), "utf8"));
-        store.importBundle(bundle, { mode });
+        store.importBundle(bundle, {
+          mode,
+          currentAgentId: undefined,
+          onConflict: "preserve_versions",
+        });
         return { text: `Imported learning bundle from ${resolveInputPath(bundlePath)}` };
       }
 
@@ -125,9 +157,11 @@ export function createSelfLearningCommand(params: {
           "Usage:",
           "/selflearn queue",
           "/selflearn show <skill-slug>",
+          "/selflearn patches",
           "/selflearn learn --from current",
           "/selflearn learn --from file <path>",
           "/selflearn revise <skill-slug> <feedback>",
+          "/selflearn apply-patch <proposal-id>",
           "/selflearn approve <skill-slug>",
           "/selflearn reject <skill-slug>",
           "/selflearn keep-candidate <skill-slug>",

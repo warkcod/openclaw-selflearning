@@ -164,6 +164,48 @@ export class LearningStore {
     this.writeState(state);
   }
 
+  listPatchProposals() {
+    return this.listAllSkills()
+      .flatMap((skill) => skill.patchHistory.map((proposal) => ({ ...proposal, targetTitle: skill.title })))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
+  applyPatchProposal(proposalId: string) {
+    const state = this.readState();
+
+    for (const skill of Object.values(state.skills)) {
+      const proposal = skill.patchHistory.find((entry) => entry.proposalId === proposalId);
+      if (!proposal) {
+        continue;
+      }
+
+      const updated: SkillRecord = {
+        ...skill,
+        summary: proposal.proposedSummary,
+        content: proposal.proposedContent,
+        version: skill.version + 1,
+        parentVersion: skill.version,
+        updatedAt: new Date().toISOString(),
+        patchHistory: skill.patchHistory.filter((entry) => entry.proposalId !== proposalId),
+        patchTargetSkillId: undefined,
+        patchReason: undefined,
+        lastSuggestedPatchAt: undefined,
+      };
+
+      state.skills[skill.slug] = updated;
+      this.writeState(state);
+      this.syncManifestFromState(state);
+
+      const relativePath = path.join("skills", updated.state, updated.slug, "SKILL.md");
+      fs.mkdirSync(path.dirname(path.join(this.paths.rootDir, relativePath)), { recursive: true });
+      fs.writeFileSync(path.join(this.paths.rootDir, relativePath), updated.content, "utf8");
+
+      return updated;
+    }
+
+    return null;
+  }
+
   getSkillRecord(slug: string) {
     return this.readState().skills[slug];
   }
@@ -361,17 +403,43 @@ export class LearningStore {
     };
   }
 
-  importBundle(bundle: LearningBundle, params: { mode: "rebind_to_current_agent" | "preserve_origin_agent" | "merge_into_user_profile" }) {
+  importBundle(
+    bundle: LearningBundle,
+    params: {
+      mode: "rebind_to_current_agent" | "preserve_origin_agent" | "merge_into_user_profile";
+      currentAgentId?: string;
+      onConflict?: "preserve_versions" | "prefer_incoming" | "prefer_existing";
+    },
+  ) {
     const state = this.readState();
     for (const [slug, record] of Object.entries(bundle.state.skills)) {
       const existing = state.skills[slug];
-      if (!existing || existing.userModified === false) {
-        state.skills[slug] = {
-          ...record,
-          agentId:
-            params.mode === "preserve_origin_agent" ? record.agentId : undefined,
-          updatedAt: new Date().toISOString(),
-        };
+      const nextRecord = {
+        ...record,
+        agentId: resolveImportedAgentId(record.agentId, params.mode, params.currentAgentId),
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (!existing) {
+        state.skills[slug] = nextRecord;
+        continue;
+      }
+
+      if (params.onConflict === "prefer_existing") {
+        continue;
+      }
+
+      if (params.onConflict === "prefer_incoming") {
+        state.skills[slug] = nextRecord;
+        continue;
+      }
+
+      if (existing.userModified) {
+        continue;
+      }
+
+      if ((existing.version ?? 0) <= (nextRecord.version ?? 0)) {
+        state.skills[slug] = nextRecord;
       }
     }
     for (const [id, record] of Object.entries(bundle.state.memories)) {
@@ -454,6 +522,20 @@ export class LearningStore {
 
 function safeFileName(value: string) {
   return value.replace(/[^a-z0-9._-]+/giu, "-");
+}
+
+function resolveImportedAgentId(
+  originalAgentId: string | undefined,
+  mode: "rebind_to_current_agent" | "preserve_origin_agent" | "merge_into_user_profile",
+  currentAgentId: string | undefined,
+) {
+  if (mode === "preserve_origin_agent") {
+    return originalAgentId;
+  }
+  if (mode === "merge_into_user_profile") {
+    return undefined;
+  }
+  return currentAgentId;
 }
 
 function appendRevisionNote(content: string, feedback: string) {

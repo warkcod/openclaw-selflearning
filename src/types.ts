@@ -59,6 +59,8 @@ export type SkillPatchProposal = {
   reason: string;
   mode: "patch" | "patch-proposal";
   createdAt: string;
+  proposedSummary: string;
+  proposedContent: string;
 };
 
 export type ReviewReasonCode =

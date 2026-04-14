@@ -272,4 +272,96 @@ describe("createSelfLearningCommand", () => {
     expect(importResult.text).toContain("Imported");
     expect(importStore.getSkillRecord("customer-onboarding-checklist")?.state).toBe("promoted");
   });
+
+  it("lists patch proposals", async () => {
+    store.upsertSkillRecord({
+      slug: "customer-onboarding-checklist",
+      title: "Customer Onboarding Checklist",
+      summary: "Checklist for onboarding a customer",
+      state: "promoted",
+      origin: "selflearned",
+      ownership: "system",
+      reviewStatus: "approved",
+      confidence: 0.9,
+      successfulRecalls: 2,
+      hitCount: 3,
+      userModified: false,
+      version: 1,
+      content: "# Customer Onboarding Checklist\n\nUse this flow.",
+    });
+    store.appendPatchProposal({
+      proposalId: "proposal-1",
+      candidateSlug: "customer-onboarding-checklist",
+      targetSlug: "customer-onboarding-checklist",
+      confidence: 0.92,
+      reason: "Add an escalation step.",
+      mode: "patch",
+      createdAt: new Date().toISOString(),
+      proposedContent: "# Customer Onboarding Checklist\n\nUse this flow.\n\n## Escalation\n\n- Escalate billing blockers.",
+      proposedSummary: "Checklist with escalation step",
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn patches",
+        args: "patches",
+      }),
+    );
+
+    expect(result.text).toContain("proposal-1");
+    expect(result.text).toContain("customer-onboarding-checklist");
+  });
+
+  it("applies a patch proposal to the target skill", async () => {
+    store.upsertSkillRecord({
+      slug: "customer-onboarding-checklist",
+      title: "Customer Onboarding Checklist",
+      summary: "Checklist for onboarding a customer",
+      state: "promoted",
+      origin: "selflearned",
+      ownership: "system",
+      reviewStatus: "approved",
+      confidence: 0.9,
+      successfulRecalls: 2,
+      hitCount: 3,
+      userModified: false,
+      version: 1,
+      content: "# Customer Onboarding Checklist\n\nUse this flow.",
+    });
+    store.appendPatchProposal({
+      proposalId: "proposal-1",
+      candidateSlug: "customer-onboarding-checklist",
+      targetSlug: "customer-onboarding-checklist",
+      confidence: 0.92,
+      reason: "Add an escalation step.",
+      mode: "patch",
+      createdAt: new Date().toISOString(),
+      proposedContent: "# Customer Onboarding Checklist\n\nUse this flow.\n\n## Escalation\n\n- Escalate billing blockers.",
+      proposedSummary: "Checklist with escalation step",
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn apply-patch proposal-1",
+        args: "apply-patch proposal-1",
+      }),
+    );
+
+    const updated = store.getSkillRecord("customer-onboarding-checklist");
+    expect(result.text).toContain("Applied patch proposal");
+    expect(updated?.content).toContain("Escalation");
+    expect(updated?.version).toBe(2);
+  });
 });
