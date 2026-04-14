@@ -11,6 +11,7 @@ import type {
   RecallAssetSelection,
   SkillPatchProposal,
   SkillRecord,
+  TranscriptRecord,
 } from "../types.js";
 
 export class LearningStore {
@@ -34,6 +35,7 @@ export class LearningStore {
         bundleVersion: 1,
         skills: {},
         memories: {},
+        transcripts: {},
       });
     }
 
@@ -42,6 +44,7 @@ export class LearningStore {
         schemaVersion: 1,
         skills: {},
         memories: {},
+        transcripts: {},
       });
     }
   }
@@ -134,6 +137,68 @@ export class LearningStore {
 
   listCandidateMemories() {
     return Object.values(this.readState().memories).filter((memory) => memory.state === "candidate");
+  }
+
+  upsertTranscriptRecord(params: {
+    id: string;
+    title: string;
+    summary: string;
+    content: string;
+    state: TranscriptRecord["state"];
+    confidence: number;
+    reviewId?: string;
+  }) {
+    const state = this.readState();
+    const record: TranscriptRecord = {
+      id: params.id,
+      title: params.title,
+      summary: params.summary,
+      content: params.content,
+      state: params.state,
+      confidence: params.confidence,
+      successfulRecalls: state.transcripts[params.id]?.successfulRecalls ?? 0,
+      hitCount: state.transcripts[params.id]?.hitCount ?? 0,
+      failureCount: state.transcripts[params.id]?.failureCount ?? 0,
+      userCorrectionCount: state.transcripts[params.id]?.userCorrectionCount ?? 0,
+      lastRecallAt: state.transcripts[params.id]?.lastRecallAt,
+      lastOutcome: state.transcripts[params.id]?.lastOutcome,
+      suppressed: state.transcripts[params.id]?.suppressed ?? false,
+      suppressedAt: state.transcripts[params.id]?.suppressedAt,
+      suppressionReason: state.transcripts[params.id]?.suppressionReason,
+      reviewId: params.reviewId,
+      updatedAt: new Date().toISOString(),
+    };
+    state.transcripts[params.id] = record;
+    this.writeState(state);
+
+    const relativePath = path.join(
+      "transcripts",
+      params.state,
+      `${safeFileName(params.id)}.md`,
+    );
+    fs.mkdirSync(path.dirname(path.join(this.paths.rootDir, relativePath)), { recursive: true });
+    fs.writeFileSync(
+      path.join(this.paths.rootDir, relativePath),
+      `# ${params.title}\n\n## Summary\n\n${params.summary}\n\n## Content\n\n${params.content}\n`,
+      "utf8",
+    );
+
+    const manifest = this.readManifest();
+    manifest.transcripts[params.id] = {
+      state: params.state,
+      relativePath,
+    };
+    this.writeManifest(manifest);
+  }
+
+  getTranscriptRecord(id: string) {
+    return this.readState().transcripts[id];
+  }
+
+  listCandidateTranscripts() {
+    return Object.values(this.readState().transcripts).filter(
+      (transcript) => transcript.state === "candidate",
+    );
   }
 
   listEvolutionTraces() {
@@ -281,6 +346,7 @@ export class LearningStore {
   listRecallAssets(params: {
     maxMemories: number;
     maxSkills: number;
+    maxTranscripts: number;
     allowCandidateRecall: boolean;
   }): RecallAssetSelection {
     const state = this.readState();
@@ -301,6 +367,23 @@ export class LearningStore {
         state: memory.state,
       }));
 
+    const transcriptStates = params.allowCandidateRecall ? ["promoted", "candidate"] : ["promoted"];
+    const transcripts = Object.values(state.transcripts)
+      .filter(
+        (transcript) =>
+          transcriptStates.includes(transcript.state) && transcript.suppressed !== true,
+      )
+      .sort(compareTranscriptsForRecall)
+      .slice(0, params.maxTranscripts)
+      .map((transcript) => ({
+        id: transcript.id,
+        title: transcript.title,
+        summary: transcript.summary,
+        content: transcript.content,
+        confidence: transcript.confidence,
+        state: transcript.state,
+      }));
+
     const skills = Object.values(state.skills)
       .filter((skill) => skillStates.includes(skill.state) && skill.suppressed !== true)
       .sort(compareSkillsForRecall)
@@ -315,7 +398,7 @@ export class LearningStore {
         origin: skill.origin,
       }));
 
-    return { memories, skills };
+    return { memories, skills, transcripts };
   }
 
   saveEvolutionTrace(trace: EvolutionTrace) {
@@ -345,6 +428,24 @@ export class LearningStore {
         }
         state.skills[slug] = {
           ...skill,
+          updatedAt: now,
+        };
+        continue;
+      }
+      if (entry.assetKind === "transcript") {
+        const transcriptId = entry.assetId.replace(/^transcript:/u, "transcript:");
+        const transcript = state.transcripts[transcriptId];
+        if (!transcript) {
+          continue;
+        }
+        transcript.hitCount += 1;
+        transcript.lastRecallAt = now;
+        transcript.lastOutcome = entry.outcome;
+        if (entry.outcome === "success") {
+          transcript.successfulRecalls += 1;
+        }
+        state.transcripts[transcriptId] = {
+          ...transcript,
           updatedAt: now,
         };
         continue;
@@ -383,6 +484,20 @@ export class LearningStore {
       updateLifecycleCounters(skill, entry, now, countUsage);
       applyLifecycleStateTransitions(skill);
       state.skills[slug] = { ...skill, updatedAt: now };
+      this.writeState(state);
+      this.syncManifestFromState(state);
+      return;
+    }
+
+    if (entry.assetKind === "transcript") {
+      const transcriptId = entry.assetId.replace(/^transcript:/u, "transcript:");
+      const transcript = state.transcripts[transcriptId];
+      if (!transcript) {
+        return;
+      }
+      updateLifecycleCounters(transcript, entry, now, countUsage);
+      applyTranscriptLifecycleStateTransitions(transcript);
+      state.transcripts[transcriptId] = { ...transcript, updatedAt: now };
       this.writeState(state);
       this.syncManifestFromState(state);
       return;
@@ -435,6 +550,21 @@ export class LearningStore {
       decision === "approved" ? "promoted" : decision === "rejected" ? "deprecated" : "candidate";
     memory.updatedAt = new Date().toISOString();
     state.memories[id] = memory;
+    this.writeState(state);
+    this.syncManifestFromState(state);
+    return true;
+  }
+
+  setTranscriptReviewDecision(id: string, decision: "approved" | "rejected" | "candidate") {
+    const state = this.readState();
+    const transcript = state.transcripts[id];
+    if (!transcript) {
+      return false;
+    }
+    transcript.state =
+      decision === "approved" ? "promoted" : decision === "rejected" ? "deprecated" : "candidate";
+    transcript.updatedAt = new Date().toISOString();
+    state.transcripts[id] = transcript;
     this.writeState(state);
     this.syncManifestFromState(state);
     return true;
@@ -532,6 +662,11 @@ export class LearningStore {
           params.includeCandidates ? true : record.state !== "candidate",
         ),
       ),
+      transcripts: Object.fromEntries(
+        Object.entries(state.transcripts).filter(([, record]) =>
+          params.includeCandidates ? true : record.state !== "candidate",
+        ),
+      ),
     };
     const manifest = this.readManifest();
     const filteredManifest: LearningManifest = {
@@ -542,6 +677,11 @@ export class LearningStore {
       ),
       memories: Object.fromEntries(
         Object.entries(manifest.memories).filter(([id]) => Boolean(filteredState.memories[id])),
+      ),
+      transcripts: Object.fromEntries(
+        Object.entries(manifest.transcripts).filter(
+          ([id]) => Boolean(filteredState.transcripts[id]),
+        ),
       ),
     };
 
@@ -609,6 +749,14 @@ export class LearningStore {
         };
       }
     }
+    for (const [id, record] of Object.entries(bundle.state.transcripts)) {
+      if (!state.transcripts[id]) {
+        state.transcripts[id] = {
+          ...record,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    }
     this.writeState(state);
     this.syncManifestFromState(state);
     for (const skill of Object.values(state.skills)) {
@@ -629,6 +777,19 @@ export class LearningStore {
         "utf8",
       );
     }
+    for (const transcript of Object.values(state.transcripts)) {
+      const relativePath = path.join(
+        "transcripts",
+        transcript.state,
+        `${safeFileName(transcript.id)}.md`,
+      );
+      fs.mkdirSync(path.dirname(path.join(this.paths.rootDir, relativePath)), { recursive: true });
+      fs.writeFileSync(
+        path.join(this.paths.rootDir, relativePath),
+        `# ${transcript.title}\n\n## Summary\n\n${transcript.summary}\n\n## Content\n\n${transcript.content}\n`,
+        "utf8",
+      );
+    }
   }
 
   private syncManifestFromState(state: LearningState) {
@@ -637,6 +798,7 @@ export class LearningStore {
       bundleVersion: 1,
       skills: {},
       memories: {},
+      transcripts: {},
     };
 
     for (const skill of Object.values(state.skills)) {
@@ -655,6 +817,17 @@ export class LearningStore {
           "memory",
           memory.kind === "user-model" ? "user_model" : memory.state === "promoted" ? "durable" : "candidate",
           `${safeFileName(memory.id)}.md`,
+        ),
+      };
+    }
+
+    for (const transcript of Object.values(state.transcripts)) {
+      manifest.transcripts[transcript.id] = {
+        state: transcript.state,
+        relativePath: path.join(
+          "transcripts",
+          transcript.state,
+          `${safeFileName(transcript.id)}.md`,
         ),
       };
     }
@@ -744,6 +917,16 @@ function applyMemoryLifecycleStateTransitions(
   }
 }
 
+function applyTranscriptLifecycleStateTransitions(
+  transcript: TranscriptRecord,
+) {
+  if ((transcript.userCorrectionCount ?? 0) >= 2) {
+    transcript.suppressed = true;
+    transcript.suppressedAt = new Date().toISOString();
+    transcript.suppressionReason = "repeated-user-corrections";
+  }
+}
+
 function resolveImportedAgentId(
   originalAgentId: string | undefined,
   bundleAgentId: string | undefined,
@@ -778,6 +961,13 @@ function compareByConfidenceAndFreshness(left: { confidence: number; updatedAt?:
 }
 
 function compareMemoriesForRecall(left: MemoryRecord, right: MemoryRecord) {
+  if (right.successfulRecalls !== left.successfulRecalls) {
+    return right.successfulRecalls - left.successfulRecalls;
+  }
+  return compareByConfidenceAndFreshness(left, right);
+}
+
+function compareTranscriptsForRecall(left: TranscriptRecord, right: TranscriptRecord) {
   if (right.successfulRecalls !== left.successfulRecalls) {
     return right.successfulRecalls - left.successfulRecalls;
   }

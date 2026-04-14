@@ -44,6 +44,7 @@ export function createSelfLearningEngine(params: {
       const recall = params.store.listRecallAssets({
         maxMemories: params.recallConfig.maxMemories,
         maxSkills: params.recallConfig.maxSkills,
+        maxTranscripts: params.recallConfig.maxTranscripts,
         allowCandidateRecall: params.recallConfig.allowCandidateRecall,
       });
       pendingRecall.set(context.sessionKey ?? context.sessionId, recall);

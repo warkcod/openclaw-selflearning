@@ -26,6 +26,7 @@ describe("plugin entry", () => {
               summary: "learned onboarding flow",
               memoryCandidates: [],
               skillCandidates: [],
+              transcriptCandidates: [],
               assetUsage: [],
               dedupeHints: [],
               reuseConfidence: 0.8,

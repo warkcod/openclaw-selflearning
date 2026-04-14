@@ -61,6 +61,7 @@ describe("createSelfLearningEngine", () => {
       recallConfig: {
         maxMemories: 5,
         maxSkills: 5,
+        maxTranscripts: 5,
         allowCandidateRecall: false,
         trackAssetUsage: true,
       },
@@ -74,6 +75,7 @@ describe("createSelfLearningEngine", () => {
           summary: "learned onboarding flow",
           memoryCandidates: [],
           skillCandidates: [],
+          transcriptCandidates: [],
           assetUsage: [],
           dedupeHints: [],
           reuseConfidence: 0.8,
@@ -105,6 +107,7 @@ describe("createSelfLearningEngine", () => {
       recallConfig: {
         maxMemories: 5,
         maxSkills: 5,
+        maxTranscripts: 5,
         allowCandidateRecall: false,
         trackAssetUsage: true,
       },
@@ -133,6 +136,15 @@ describe("createSelfLearningEngine", () => {
               confidence: 0.9,
             },
           ],
+          transcriptCandidates: [
+            {
+              title: "Incident retrospective decision context",
+              summary: "Why the team moved incident snapshots to Glacier.",
+              content:
+                "The team chose Glacier after comparing restore latency and storage cost tradeoffs.",
+              confidence: 0.75,
+            },
+          ],
           assetUsage: [],
           dedupeHints: [],
           reuseConfidence: 0.9,
@@ -150,7 +162,20 @@ describe("createSelfLearningEngine", () => {
 
     expect(store.listCandidateSkills()).toHaveLength(1);
     expect(
-      store.listRecallAssets({ maxMemories: 5, maxSkills: 5, allowCandidateRecall: true }).memories,
+      store.listRecallAssets({
+        maxMemories: 5,
+        maxSkills: 5,
+        maxTranscripts: 5,
+        allowCandidateRecall: true,
+      }).memories,
+    ).toHaveLength(1);
+    expect(
+      store.listRecallAssets({
+        maxMemories: 5,
+        maxSkills: 5,
+        maxTranscripts: 5,
+        allowCandidateRecall: true,
+      }).transcripts,
     ).toHaveLength(1);
   });
 });

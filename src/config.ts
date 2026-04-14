@@ -16,6 +16,7 @@ export const defaultPluginConfig: SelfLearningPluginConfig = {
   recall: {
     maxMemories: 5,
     maxSkills: 5,
+    maxTranscripts: 5,
     allowCandidateRecall: false,
     trackAssetUsage: true,
   },
@@ -49,6 +50,7 @@ const triggerSchema = z.object({
 const recallSchema = z.object({
   maxMemories: z.number().int().min(1),
   maxSkills: z.number().int().min(1),
+  maxTranscripts: z.number().int().min(1),
   allowCandidateRecall: z.boolean(),
   trackAssetUsage: z.boolean(),
 });

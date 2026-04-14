@@ -32,6 +32,13 @@ export function createSelfLearningCommand(params: {
         return { text: lines.length > 0 ? lines.join("\n") : "No candidate memories." };
       }
 
+      if (subcommand === "transcripts") {
+        const lines = store
+          .listCandidateTranscripts()
+          .map((transcript) => `${transcript.id} | ${transcript.state} | ${transcript.title}`);
+        return { text: lines.length > 0 ? lines.join("\n") : "No candidate transcripts." };
+      }
+
       if (subcommand === "traces") {
         const traces = store.listEvolutionTraces();
         if (traces.length === 0) {
@@ -120,6 +127,19 @@ export function createSelfLearningCommand(params: {
         }
         const updated = store.setMemoryReviewDecision(memoryId, "approved");
         return { text: updated ? `Memory ${memoryId} approved.` : `Memory ${memoryId} not found.` };
+      }
+
+      if (subcommand === "approve-transcript") {
+        const transcriptId = rest[0];
+        if (!transcriptId) {
+          return { text: "Usage: /selflearn approve-transcript <transcript-id>" };
+        }
+        const updated = store.setTranscriptReviewDecision(transcriptId, "approved");
+        return {
+          text: updated
+            ? `Transcript ${transcriptId} approved.`
+            : `Transcript ${transcriptId} not found.`,
+        };
       }
 
       if (subcommand === "reject-memory") {
@@ -263,6 +283,7 @@ export function createSelfLearningCommand(params: {
           "Usage:",
           "/selflearn queue",
           "/selflearn memories",
+          "/selflearn transcripts",
           "/selflearn traces",
           "/selflearn trace <trace-id>",
           "/selflearn show <skill-slug>",
@@ -273,6 +294,7 @@ export function createSelfLearningCommand(params: {
           "/selflearn apply-patch <proposal-id>",
           "/selflearn approve <skill-slug>",
           "/selflearn approve-memory <memory-id>",
+          "/selflearn approve-transcript <transcript-id>",
           "/selflearn reject-memory <memory-id>",
           "/selflearn keep-memory <memory-id>",
           "/selflearn reject <skill-slug>",

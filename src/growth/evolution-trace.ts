@@ -18,7 +18,7 @@ export function applyEvolutionTrace(params: {
     notes: entry.notes,
   }));
 
-  if (traceEntries.length === 0) {
+      if (traceEntries.length === 0) {
     return;
   }
 

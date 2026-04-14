@@ -59,6 +59,10 @@
             "type": "integer",
             "minimum": 1
           },
+          "maxTranscripts": {
+            "type": "integer",
+            "minimum": 1
+          },
           "allowCandidateRecall": {
             "type": "boolean"
           },

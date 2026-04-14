@@ -8,6 +8,7 @@ describe("parseReviewResult", () => {
         summary: "learned onboarding flow",
         memoryCandidates: [],
         skillCandidates: [],
+        transcriptCandidates: [],
         assetUsage: [],
         dedupeHints: [],
         reuseConfidence: 0.9,
@@ -25,6 +26,7 @@ thinking...
   "summary": "learned onboarding flow",
   "memoryCandidates": [],
   "skillCandidates": [],
+  "transcriptCandidates": [],
   "assetUsage": [],
   "dedupeHints": [],
   "reuseConfidence": 0.8
@@ -61,6 +63,15 @@ describe("runReviewWorker", () => {
               confidence: 0.9,
             },
           ],
+          transcriptCandidates: [
+            {
+              title: "Incident retrospective decision context",
+              summary: "Why the team moved incident snapshots to Glacier.",
+              content:
+                "The team chose Glacier after comparing restore latency and storage cost tradeoffs.",
+              confidence: 0.75,
+            },
+          ],
           assetUsage: [],
           dedupeHints: [],
           reuseConfidence: 0.9,
@@ -70,5 +81,6 @@ describe("runReviewWorker", () => {
 
     expect(result.memoryCandidates).toHaveLength(1);
     expect(result.skillCandidates).toHaveLength(1);
+    expect(result.transcriptCandidates).toHaveLength(1);
   });
 });

@@ -104,6 +104,33 @@ describe("createSelfLearningCommand", () => {
     expect(result.text).toContain("Default follow-up channel");
   });
 
+  it("lists candidate transcript recalls", async () => {
+    store.upsertTranscriptRecord({
+      id: "transcript:incident-retrospective",
+      title: "Incident retrospective decision context",
+      summary: "Why the team moved incident snapshots to Glacier.",
+      content: "The team chose Glacier after comparing restore latency and storage cost tradeoffs.",
+      state: "candidate",
+      confidence: 0.75,
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn transcripts",
+        args: "transcripts",
+      }),
+    );
+
+    expect(result.text).toContain("transcript:incident-retrospective");
+    expect(result.text).toContain("Incident retrospective decision context");
+  });
+
   it("lists evolution traces", async () => {
     store.saveEvolutionTrace({
       traceId: "trace-session-1",
@@ -278,6 +305,33 @@ describe("createSelfLearningCommand", () => {
 
     expect(result.text).toContain("rejected");
     expect(store.getMemoryRecord("memory:default-channel")?.state).toBe("deprecated");
+  });
+
+  it("approves a candidate transcript recall", async () => {
+    store.upsertTranscriptRecord({
+      id: "transcript:incident-retrospective",
+      title: "Incident retrospective decision context",
+      summary: "Why the team moved incident snapshots to Glacier.",
+      content: "The team chose Glacier after comparing restore latency and storage cost tradeoffs.",
+      state: "candidate",
+      confidence: 0.75,
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn approve-transcript transcript:incident-retrospective",
+        args: "approve-transcript transcript:incident-retrospective",
+      }),
+    );
+
+    expect(result.text).toContain("approved");
+    expect(store.getTranscriptRecord("transcript:incident-retrospective")?.state).toBe("promoted");
   });
 
   it("keeps a memory as candidate", async () => {

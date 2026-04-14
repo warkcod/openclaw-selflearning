@@ -31,6 +31,22 @@ export function applyReviewResult(params: {
     });
   }
 
+  for (const transcript of params.result.transcriptCandidates) {
+    params.store.upsertTranscriptRecord({
+      id: transcript.id ?? `transcript:${params.reviewId}:${slugify(transcript.title)}`,
+      title: transcript.title,
+      summary: transcript.summary,
+      content: transcript.content,
+      state:
+        params.promotionConfig.autoPromote &&
+        transcript.confidence >= params.promotionConfig.minConfidence
+          ? "promoted"
+          : "candidate",
+      confidence: transcript.confidence,
+      reviewId: params.reviewId,
+    });
+  }
+
   const existingSkills = params.store.listAllSkills();
 
   for (const [index, rawCandidate] of params.result.skillCandidates.entries()) {

@@ -7,6 +7,9 @@ export function buildRecallPromptAddition(recall: RecallAssetSelection): string 
   const skillLines = recall.skills.map(
     (skill) => `- ${skill.slug} [${skill.state}]: ${skill.summary}`,
   );
+  const transcriptLines = recall.transcripts.map(
+    (transcript) => `- ${transcript.title}: ${transcript.summary}`,
+  );
 
   return [
     "Learned Memory:",
@@ -14,5 +17,8 @@ export function buildRecallPromptAddition(recall: RecallAssetSelection): string 
     "",
     "Learned Skills:",
     skillLines.join("\n") || "- none",
+    "",
+    "Transcript Recall:",
+    transcriptLines.join("\n") || "- none",
   ].join("\n");
 }

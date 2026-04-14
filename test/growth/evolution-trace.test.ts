@@ -86,4 +86,33 @@ describe("applyEvolutionTrace", () => {
     expect(memory?.hitCount).toBe(1);
     expect(memory?.lastOutcome).toBe("success");
   });
+
+  it("tracks transcript recall usage outcomes", () => {
+    store.upsertTranscriptRecord({
+      id: "transcript:incident-retrospective",
+      title: "Incident retrospective decision context",
+      summary: "Why the team moved incident snapshots to Glacier.",
+      content: "The team chose Glacier after comparing restore latency and storage cost tradeoffs.",
+      state: "promoted",
+      confidence: 0.75,
+    });
+
+    applyEvolutionTrace({
+      store,
+      sessionId: "session-3",
+      assetUsage: [
+        {
+          assetId: "transcript:incident-retrospective",
+          assetKind: "transcript",
+          outcome: "success",
+          notes: "The historical decision context shaped the answer.",
+        },
+      ],
+    });
+
+    const transcript = store.getTranscriptRecord("transcript:incident-retrospective");
+    expect(transcript?.successfulRecalls).toBe(1);
+    expect(transcript?.hitCount).toBe(1);
+    expect(transcript?.lastOutcome).toBe("success");
+  });
 });

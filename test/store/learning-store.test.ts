@@ -65,15 +65,25 @@ describe("LearningStore", () => {
       version: 1,
       content: "# Customer Onboarding Checklist",
     });
+    store.upsertTranscriptRecord({
+      id: "transcript:incident-retrospective",
+      title: "Incident retrospective decision context",
+      summary: "Why the team moved incident snapshots to Glacier.",
+      content: "The team chose Glacier after comparing restore latency and storage cost tradeoffs.",
+      state: "promoted",
+      confidence: 0.75,
+    });
 
     const recall = store.listRecallAssets({
       maxMemories: 5,
       maxSkills: 5,
+      maxTranscripts: 5,
       allowCandidateRecall: false,
     });
 
     expect(recall.memories).toHaveLength(1);
     expect(recall.skills).toHaveLength(1);
+    expect(recall.transcripts).toHaveLength(1);
     expect(recall.skills[0]?.slug).toBe("customer-onboarding-checklist");
   });
 
@@ -425,5 +435,22 @@ describe("LearningStore", () => {
 
     const memory = store.getMemoryRecord("memory:default-channel");
     expect(memory?.suppressed).toBe(true);
+  });
+
+  it("stores candidate transcript recalls and allows governance", () => {
+    store.upsertTranscriptRecord({
+      id: "transcript:incident-retrospective",
+      title: "Incident retrospective decision context",
+      summary: "Why the team moved incident snapshots to Glacier.",
+      content: "The team chose Glacier after comparing restore latency and storage cost tradeoffs.",
+      state: "candidate",
+      confidence: 0.75,
+    });
+
+    expect(store.listCandidateTranscripts()).toHaveLength(1);
+    expect(store.getTranscriptRecord("transcript:incident-retrospective")?.state).toBe("candidate");
+
+    store.setTranscriptReviewDecision("transcript:incident-retrospective", "approved");
+    expect(store.getTranscriptRecord("transcript:incident-retrospective")?.state).toBe("promoted");
   });
 });

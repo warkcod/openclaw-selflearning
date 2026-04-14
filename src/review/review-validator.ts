@@ -25,10 +25,19 @@ export const reviewResultSchema = z.object({
       origin: z.enum(["selflearned", "user_requested"]).optional(),
     }),
   ),
+  transcriptCandidates: z.array(
+    z.object({
+      id: z.string().min(1).optional(),
+      title: z.string().min(1),
+      summary: z.string().min(1),
+      content: z.string().min(1),
+      confidence: z.number().min(0).max(1),
+    }),
+  ),
   assetUsage: z.array(
     z.object({
       assetId: z.string().min(1),
-      assetKind: z.enum(["memory", "skill"]),
+      assetKind: z.enum(["memory", "skill", "transcript"]),
       outcome: z.enum(["success", "partial", "failure", "user_corrected", "ignored"]),
       notes: z.string().optional(),
     }),

@@ -9,6 +9,7 @@ export type ReviewStatus = "pending" | "approved" | "rejected";
 export type RecallOutcome = "success" | "partial" | "failure" | "user_corrected" | "ignored";
 
 export type MemoryRecordState = "candidate" | "promoted" | "deprecated";
+export type TranscriptRecordState = "candidate" | "promoted" | "deprecated";
 
 export type MemoryRecord = {
   id: string;
@@ -107,6 +108,26 @@ export type ReviewCandidateMemory = {
   confidence: number;
 };
 
+export type TranscriptRecord = {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  state: TranscriptRecordState;
+  confidence: number;
+  successfulRecalls: number;
+  hitCount: number;
+  failureCount?: number;
+  userCorrectionCount?: number;
+  lastRecallAt?: string;
+  lastOutcome?: RecallOutcome;
+  suppressed?: boolean;
+  suppressedAt?: string;
+  suppressionReason?: string;
+  reviewId?: string;
+  updatedAt: string;
+};
+
 export type ReviewCandidateSkill = {
   slug?: string;
   title: string;
@@ -121,9 +142,17 @@ export type ReviewCandidateSkill = {
   origin?: AssetOrigin;
 };
 
+export type ReviewCandidateTranscript = {
+  id?: string;
+  title: string;
+  summary: string;
+  content: string;
+  confidence: number;
+};
+
 export type ReviewAssetUsage = {
   assetId: string;
-  assetKind: "memory" | "skill";
+  assetKind: "memory" | "skill" | "transcript";
   outcome: RecallOutcome;
   notes?: string;
 };
@@ -132,6 +161,7 @@ export type ReviewResult = {
   summary: string;
   memoryCandidates: ReviewCandidateMemory[];
   skillCandidates: ReviewCandidateSkill[];
+  transcriptCandidates: ReviewCandidateTranscript[];
   assetUsage: ReviewAssetUsage[];
   dedupeHints: string[];
   reuseConfidence: number;
@@ -155,14 +185,24 @@ export type RecallSkillAsset = {
   origin: AssetOrigin;
 };
 
+export type RecallTranscriptAsset = {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  confidence: number;
+  state: TranscriptRecordState;
+};
+
 export type RecallAssetSelection = {
   memories: RecallMemoryAsset[];
   skills: RecallSkillAsset[];
+  transcripts: RecallTranscriptAsset[];
 };
 
 export type EvolutionTraceEntry = {
   assetId: string;
-  assetKind: "memory" | "skill";
+  assetKind: "memory" | "skill" | "transcript";
   outcome: RecallOutcome;
   notes?: string;
 };
@@ -193,12 +233,20 @@ export type LearningManifest = {
       relativePath: string;
     }
   >;
+  transcripts: Record<
+    string,
+    {
+      state: TranscriptRecordState;
+      relativePath: string;
+    }
+  >;
 };
 
 export type LearningState = {
   schemaVersion: 1;
   skills: Record<string, SkillRecord>;
   memories: Record<string, MemoryRecord>;
+  transcripts: Record<string, TranscriptRecord>;
 };
 
 export type LearningBundle = {
@@ -224,6 +272,7 @@ export type TriggerConfig = {
 export type RecallConfig = {
   maxMemories: number;
   maxSkills: number;
+  maxTranscripts: number;
   allowCandidateRecall: boolean;
   trackAssetUsage: boolean;
 };
