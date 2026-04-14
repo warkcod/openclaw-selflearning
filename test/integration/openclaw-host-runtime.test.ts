@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { execSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
@@ -40,9 +41,11 @@ describe("OpenClaw host runtime integration", () => {
   it(
     "resolves the context engine and executes the registered command through the host loader",
     async () => {
-    const helpers = await importFromOpenClawSrc<{
-      resetPluginLoaderTestStateForTest: () => void;
-      useNoBundledPlugins: () => void;
+      execSync("npm run build", { cwd: repoRoot, stdio: "ignore" });
+
+      const helpers = await importFromOpenClawSrc<{
+        resetPluginLoaderTestStateForTest: () => void;
+        useNoBundledPlugins: () => void;
     }>("src/plugins/loader.test-fixtures.ts");
     const loader = await importFromOpenClawSrc<{
       loadOpenClawPlugins: (options: Record<string, unknown>) => {

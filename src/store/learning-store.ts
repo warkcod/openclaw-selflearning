@@ -836,7 +836,14 @@ export class LearningStore {
   }
 
   private readManifest(): LearningManifest {
-    return JSON.parse(fs.readFileSync(this.paths.manifestFile, "utf8")) as LearningManifest;
+    const parsed = JSON.parse(fs.readFileSync(this.paths.manifestFile, "utf8")) as Partial<LearningManifest>;
+    return {
+      schemaVersion: 1,
+      bundleVersion: 1,
+      skills: parsed.skills ?? {},
+      memories: parsed.memories ?? {},
+      transcripts: parsed.transcripts ?? {},
+    };
   }
 
   private writeManifest(manifest: LearningManifest) {
@@ -844,7 +851,13 @@ export class LearningStore {
   }
 
   private readState(): LearningState {
-    return JSON.parse(fs.readFileSync(this.paths.stateFile, "utf8")) as LearningState;
+    const parsed = JSON.parse(fs.readFileSync(this.paths.stateFile, "utf8")) as Partial<LearningState>;
+    return {
+      schemaVersion: 1,
+      skills: parsed.skills ?? {},
+      memories: parsed.memories ?? {},
+      transcripts: parsed.transcripts ?? {},
+    };
   }
 
   private writeState(state: LearningState) {

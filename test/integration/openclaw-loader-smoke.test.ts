@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { execSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
@@ -19,6 +20,8 @@ describe("OpenClaw loader smoke", () => {
   });
 
   it("loads the built selflearning plugin through the OpenClaw plugin loader", async () => {
+    execSync("npm run build", { cwd: repoRoot, stdio: "ignore" });
+
     const helpers = await importFromOpenClawSrc<{
       resetPluginLoaderTestStateForTest: () => void;
       useNoBundledPlugins: () => void;
