@@ -119,6 +119,14 @@ export class LearningStore {
     this.writeManifest(manifest);
   }
 
+  getMemoryRecord(id: string) {
+    return this.readState().memories[id];
+  }
+
+  listCandidateMemories() {
+    return Object.values(this.readState().memories).filter((memory) => memory.state === "candidate");
+  }
+
   upsertSkillRecord(params: Omit<SkillRecord, "createdAt" | "updatedAt" | "patchHistory"> & {
     createdAt?: string;
     updatedAt?: string;
@@ -314,6 +322,21 @@ export class LearningStore {
     }
     skill.updatedAt = now;
     state.skills[slug] = skill;
+    this.writeState(state);
+    this.syncManifestFromState(state);
+    return true;
+  }
+
+  setMemoryReviewDecision(id: string, decision: "approved" | "rejected" | "candidate") {
+    const state = this.readState();
+    const memory = state.memories[id];
+    if (!memory) {
+      return false;
+    }
+    memory.state =
+      decision === "approved" ? "promoted" : decision === "rejected" ? "deprecated" : "candidate";
+    memory.updatedAt = new Date().toISOString();
+    state.memories[id] = memory;
     this.writeState(state);
     this.syncManifestFromState(state);
     return true;

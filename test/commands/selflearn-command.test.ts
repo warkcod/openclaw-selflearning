@@ -77,6 +77,33 @@ describe("createSelfLearningCommand", () => {
     expect(result.text).toContain("candidate");
   });
 
+  it("lists candidate memories", async () => {
+    store.upsertMemoryRecord({
+      id: "memory:default-channel",
+      kind: "durable-memory",
+      title: "Default follow-up channel",
+      content: "The user prefers Telegram follow-ups.",
+      state: "candidate",
+      confidence: 0.8,
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn memories",
+        args: "memories",
+      }),
+    );
+
+    expect(result.text).toContain("memory:default-channel");
+    expect(result.text).toContain("Default follow-up channel");
+  });
+
   it("delegates explicit learning from the current conversation", async () => {
     const learnCurrentConversation = vi.fn().mockResolvedValue({
       slug: "customer-onboarding-checklist",
@@ -132,6 +159,33 @@ describe("createSelfLearningCommand", () => {
 
     expect(result.text).toContain("approved");
     expect(store.getSkillRecord("customer-onboarding-checklist")?.state).toBe("promoted");
+  });
+
+  it("approves a candidate memory", async () => {
+    store.upsertMemoryRecord({
+      id: "memory:default-channel",
+      kind: "durable-memory",
+      title: "Default follow-up channel",
+      content: "The user prefers Telegram follow-ups.",
+      state: "candidate",
+      confidence: 0.8,
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn approve-memory memory:default-channel",
+        args: "approve-memory memory:default-channel",
+      }),
+    );
+
+    expect(result.text).toContain("approved");
+    expect(store.getMemoryRecord("memory:default-channel")?.state).toBe("promoted");
   });
 
   it("shows detailed skill content", async () => {

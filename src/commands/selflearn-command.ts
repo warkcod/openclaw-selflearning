@@ -24,6 +24,13 @@ export function createSelfLearningCommand(params: {
         return { text: lines.length > 0 ? lines.join("\n") : "No candidate skills." };
       }
 
+      if (subcommand === "memories") {
+        const lines = store
+          .listCandidateMemories()
+          .map((memory) => `${memory.id} | ${memory.state} | ${memory.title}`);
+        return { text: lines.length > 0 ? lines.join("\n") : "No candidate memories." };
+      }
+
       if (subcommand === "show") {
         const slug = rest[0];
         if (!slug) {
@@ -67,6 +74,15 @@ export function createSelfLearningCommand(params: {
         }
         const updated = store.setSkillReviewDecision(slug, "approved");
         return { text: updated ? `Skill ${slug} approved.` : `Skill ${slug} not found.` };
+      }
+
+      if (subcommand === "approve-memory") {
+        const memoryId = rest[0];
+        if (!memoryId) {
+          return { text: "Usage: /selflearn approve-memory <memory-id>" };
+        }
+        const updated = store.setMemoryReviewDecision(memoryId, "approved");
+        return { text: updated ? `Memory ${memoryId} approved.` : `Memory ${memoryId} not found.` };
       }
 
       if (subcommand === "reject") {
@@ -156,6 +172,7 @@ export function createSelfLearningCommand(params: {
         text: [
           "Usage:",
           "/selflearn queue",
+          "/selflearn memories",
           "/selflearn show <skill-slug>",
           "/selflearn patches",
           "/selflearn learn --from current",
@@ -163,6 +180,7 @@ export function createSelfLearningCommand(params: {
           "/selflearn revise <skill-slug> <feedback>",
           "/selflearn apply-patch <proposal-id>",
           "/selflearn approve <skill-slug>",
+          "/selflearn approve-memory <memory-id>",
           "/selflearn reject <skill-slug>",
           "/selflearn keep-candidate <skill-slug>",
           "/selflearn export [--include-candidates]",
