@@ -1,0 +1,129 @@
+{
+  "id": "selflearning",
+  "name": "OpenClaw Self-Learning",
+  "description": "Self-learning context-engine plugin that accumulates memory, reusable skills, and evolution traces.",
+  "kind": "context-engine",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "store": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rootDirName": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "trigger": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "toolCallCandidateThreshold": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "toolCallForceThreshold": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "cooldownTurns": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "retryWeight": {
+            "type": "number",
+            "minimum": 0
+          },
+          "rerouteWeight": {
+            "type": "number",
+            "minimum": 0
+          },
+          "userCorrectionWeight": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "recall": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "maxMemories": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "maxSkills": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "allowCandidateRecall": {
+            "type": "boolean"
+          },
+          "trackAssetUsage": {
+            "type": "boolean"
+          }
+        }
+      },
+      "promotion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "autoPromote": {
+            "type": "boolean"
+          },
+          "minConfidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minSuccessfulRecalls": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "revision": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requireUserApprovalForUserRequestedSkills": {
+            "type": "boolean"
+          },
+          "allowUserRevisionFlow": {
+            "type": "boolean"
+          }
+        }
+      },
+      "import": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "rebind_to_current_agent",
+              "preserve_origin_agent",
+              "merge_into_user_profile"
+            ]
+          },
+          "onConflict": {
+            "type": "string",
+            "enum": ["preserve_versions", "prefer_incoming", "prefer_existing"]
+          }
+        }
+      },
+      "export": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "includeCandidates": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
