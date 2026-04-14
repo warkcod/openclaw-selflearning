@@ -214,6 +214,24 @@ export class LearningStore {
     return null;
   }
 
+  rejectPatchProposal(proposalId: string) {
+    const state = this.readState();
+
+    for (const skill of Object.values(state.skills)) {
+      const exists = skill.patchHistory.some((entry) => entry.proposalId === proposalId);
+      if (!exists) {
+        continue;
+      }
+      skill.patchHistory = skill.patchHistory.filter((entry) => entry.proposalId !== proposalId);
+      skill.updatedAt = new Date().toISOString();
+      state.skills[skill.slug] = skill;
+      this.writeState(state);
+      return true;
+    }
+
+    return false;
+  }
+
   getSkillRecord(slug: string) {
     return this.readState().skills[slug];
   }
@@ -439,7 +457,12 @@ export class LearningStore {
       const existing = state.skills[slug];
       const nextRecord = {
         ...record,
-        agentId: resolveImportedAgentId(record.agentId, params.mode, params.currentAgentId),
+        agentId: resolveImportedAgentId(
+          record.agentId,
+          bundle.agentId,
+          params.mode,
+          params.currentAgentId,
+        ),
         updatedAt: new Date().toISOString(),
       };
 
@@ -549,11 +572,12 @@ function safeFileName(value: string) {
 
 function resolveImportedAgentId(
   originalAgentId: string | undefined,
+  bundleAgentId: string | undefined,
   mode: "rebind_to_current_agent" | "preserve_origin_agent" | "merge_into_user_profile",
   currentAgentId: string | undefined,
 ) {
   if (mode === "preserve_origin_agent") {
-    return originalAgentId;
+    return originalAgentId ?? bundleAgentId;
   }
   if (mode === "merge_into_user_profile") {
     return undefined;

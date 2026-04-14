@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import type { OpenClawPluginCommandDefinition } from "openclaw/plugin-sdk/plugin-entry";
+import { resolveAgentIdFromSessionKey } from "../runtime/agent-resolution.js";
 import { LearningStore } from "../store/learning-store.js";
 
 export function createSelfLearningCommand(params: {
@@ -85,6 +86,24 @@ export function createSelfLearningCommand(params: {
         return { text: updated ? `Memory ${memoryId} approved.` : `Memory ${memoryId} not found.` };
       }
 
+      if (subcommand === "reject-memory") {
+        const memoryId = rest[0];
+        if (!memoryId) {
+          return { text: "Usage: /selflearn reject-memory <memory-id>" };
+        }
+        const updated = store.setMemoryReviewDecision(memoryId, "rejected");
+        return { text: updated ? `Memory ${memoryId} rejected.` : `Memory ${memoryId} not found.` };
+      }
+
+      if (subcommand === "keep-memory") {
+        const memoryId = rest[0];
+        if (!memoryId) {
+          return { text: "Usage: /selflearn keep-memory <memory-id>" };
+        }
+        const updated = store.setMemoryReviewDecision(memoryId, "candidate");
+        return { text: updated ? `Memory ${memoryId} kept as candidate.` : `Memory ${memoryId} not found.` };
+      }
+
       if (subcommand === "reject") {
         const slug = rest[0];
         if (!slug) {
@@ -130,6 +149,19 @@ export function createSelfLearningCommand(params: {
         };
       }
 
+      if (subcommand === "reject-patch") {
+        const proposalId = rest[0];
+        if (!proposalId) {
+          return { text: "Usage: /selflearn reject-patch <proposal-id>" };
+        }
+        const updated = store.rejectPatchProposal(proposalId);
+        return {
+          text: updated
+            ? `Rejected patch proposal ${proposalId}.`
+            : `Patch proposal ${proposalId} not found.`,
+        };
+      }
+
       if (subcommand === "learn") {
         if (rest[0] === "--from" && rest[1] === "current") {
           const result = await params.learnCurrentConversation({ sessionFile: ctx.sessionFile });
@@ -145,7 +177,10 @@ export function createSelfLearningCommand(params: {
 
       if (subcommand === "export") {
         const includeCandidates = rest.includes("--include-candidates");
-        const bundle = store.exportBundle({ includeCandidates, agentId: undefined });
+        const bundle = store.exportBundle({
+          includeCandidates,
+          agentId: resolveAgentIdFromSessionKey(ctx.sessionKey),
+        });
         const exportDir = path.join(store.getPaths().rootDir, "exports");
         fs.mkdirSync(exportDir, { recursive: true });
         const filePath = path.join(exportDir, `selflearning-bundle-${Date.now()}.json`);
@@ -160,10 +195,11 @@ export function createSelfLearningCommand(params: {
           return { text: "Usage: /selflearn import <bundle-path> [--mode <mode>]" };
         }
         const bundle = JSON.parse(fs.readFileSync(resolveInputPath(bundlePath), "utf8"));
+        const onConflict = resolveConflictMode(rest);
         store.importBundle(bundle, {
           mode,
-          currentAgentId: undefined,
-          onConflict: "preserve_versions",
+          currentAgentId: resolveAgentIdFromSessionKey(ctx.sessionKey),
+          onConflict,
         });
         return { text: `Imported learning bundle from ${resolveInputPath(bundlePath)}` };
       }
@@ -181,10 +217,13 @@ export function createSelfLearningCommand(params: {
           "/selflearn apply-patch <proposal-id>",
           "/selflearn approve <skill-slug>",
           "/selflearn approve-memory <memory-id>",
+          "/selflearn reject-memory <memory-id>",
+          "/selflearn keep-memory <memory-id>",
           "/selflearn reject <skill-slug>",
           "/selflearn keep-candidate <skill-slug>",
+          "/selflearn reject-patch <proposal-id>",
           "/selflearn export [--include-candidates]",
-          "/selflearn import <bundle-path> [--mode <mode>]",
+          "/selflearn import <bundle-path> [--mode <mode>] [--on-conflict <mode>]",
         ].join("\n"),
       };
     },
@@ -206,4 +245,13 @@ function resolveImportMode(values: string[]) {
     return mode;
   }
   return "rebind_to_current_agent" as const;
+}
+
+function resolveConflictMode(values: string[]) {
+  const conflictIndex = values.findIndex((value) => value === "--on-conflict");
+  const mode = conflictIndex >= 0 ? values[conflictIndex + 1] : undefined;
+  if (mode === "prefer_incoming" || mode === "prefer_existing" || mode === "preserve_versions") {
+    return mode;
+  }
+  return "preserve_versions" as const;
 }

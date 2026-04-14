@@ -188,6 +188,60 @@ describe("createSelfLearningCommand", () => {
     expect(store.getMemoryRecord("memory:default-channel")?.state).toBe("promoted");
   });
 
+  it("rejects a candidate memory", async () => {
+    store.upsertMemoryRecord({
+      id: "memory:default-channel",
+      kind: "durable-memory",
+      title: "Default follow-up channel",
+      content: "The user prefers Telegram follow-ups.",
+      state: "candidate",
+      confidence: 0.8,
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn reject-memory memory:default-channel",
+        args: "reject-memory memory:default-channel",
+      }),
+    );
+
+    expect(result.text).toContain("rejected");
+    expect(store.getMemoryRecord("memory:default-channel")?.state).toBe("deprecated");
+  });
+
+  it("keeps a memory as candidate", async () => {
+    store.upsertMemoryRecord({
+      id: "memory:default-channel",
+      kind: "durable-memory",
+      title: "Default follow-up channel",
+      content: "The user prefers Telegram follow-ups.",
+      state: "deprecated",
+      confidence: 0.8,
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn keep-memory memory:default-channel",
+        args: "keep-memory memory:default-channel",
+      }),
+    );
+
+    expect(result.text).toContain("candidate");
+    expect(store.getMemoryRecord("memory:default-channel")?.state).toBe("candidate");
+  });
+
   it("shows detailed skill content", async () => {
     store.upsertSkillRecord({
       slug: "customer-onboarding-checklist",
@@ -417,5 +471,118 @@ describe("createSelfLearningCommand", () => {
     expect(result.text).toContain("Applied patch proposal");
     expect(updated?.content).toContain("Escalation");
     expect(updated?.version).toBe(2);
+  });
+
+  it("rejects a patch proposal without changing the target skill", async () => {
+    store.upsertSkillRecord({
+      slug: "customer-onboarding-checklist",
+      title: "Customer Onboarding Checklist",
+      summary: "Checklist for onboarding a customer",
+      state: "promoted",
+      origin: "selflearned",
+      ownership: "system",
+      reviewStatus: "approved",
+      confidence: 0.9,
+      successfulRecalls: 2,
+      hitCount: 3,
+      userModified: false,
+      version: 1,
+      content: "# Customer Onboarding Checklist\n\nUse this flow.",
+    });
+    store.appendPatchProposal({
+      proposalId: "proposal-2",
+      candidateSlug: "customer-onboarding-checklist",
+      targetSlug: "customer-onboarding-checklist",
+      confidence: 0.92,
+      reason: "Add an escalation step.",
+      mode: "patch",
+      createdAt: new Date().toISOString(),
+      proposedContent: "# Customer Onboarding Checklist\n\nUse this flow.\n\n## Escalation\n\n- Escalate billing blockers.",
+      proposedSummary: "Checklist with escalation step",
+    });
+
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn reject-patch proposal-2",
+        args: "reject-patch proposal-2",
+      }),
+    );
+
+    const updated = store.getSkillRecord("customer-onboarding-checklist");
+    expect(result.text).toContain("Rejected patch proposal");
+    expect(updated?.content).not.toContain("Escalation");
+    expect(updated?.patchHistory.some((entry) => entry.proposalId === "proposal-2")).toBe(false);
+  });
+
+  it("imports a bundle with explicit mode and conflict options", async () => {
+    store.upsertSkillRecord({
+      slug: "customer-onboarding-checklist",
+      title: "Customer Onboarding Checklist",
+      summary: "Checklist for onboarding a customer",
+      state: "promoted",
+      origin: "selflearned",
+      ownership: "system",
+      reviewStatus: "approved",
+      confidence: 0.9,
+      successfulRecalls: 2,
+      hitCount: 3,
+      userModified: false,
+      version: 1,
+      content: "# Customer Onboarding Checklist\n\nUse this flow.",
+    });
+
+    const exportCommand = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const exportResult = await exportCommand.handler(
+      createCommandContext({
+        commandBody: "selflearn export",
+        args: "export",
+        sessionKey: "agent:alpha:main",
+      }),
+    );
+
+    const exportText = exportResult.text ?? "";
+    const match = /to (.+)$/u.exec(exportText);
+    const bundlePath = match?.[1] ?? "";
+
+    const importRoot = fs.mkdtempSync(path.join(os.tmpdir(), "selflearn-command-import-mode-"));
+    const importStore = new LearningStore({
+      rootDir: importRoot,
+      reviewsDir: path.join(importRoot, "reviews"),
+      skillsDir: path.join(importRoot, "skills"),
+      memoryDir: path.join(importRoot, "memory"),
+      traceDir: path.join(importRoot, "evolution-trace"),
+      manifestFile: path.join(importRoot, "manifest.json"),
+      stateFile: path.join(importRoot, "state.json"),
+    });
+    importStore.initialize();
+
+    const importCommand = createSelfLearningCommand({
+      resolveStore: () => importStore,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+    });
+
+    const importResult = await importCommand.handler(
+      createCommandContext({
+        commandBody:
+          `selflearn import ${bundlePath} --mode preserve_origin_agent --on-conflict prefer_incoming`,
+        args: `import ${bundlePath} --mode preserve_origin_agent --on-conflict prefer_incoming`,
+        sessionKey: "agent:beta:main",
+      }),
+    );
+
+    expect(importResult.text).toContain("Imported");
+    expect(importStore.getSkillRecord("customer-onboarding-checklist")?.agentId).toBe("alpha");
   });
 });
