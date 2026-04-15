@@ -8,6 +8,22 @@ export function createSelfLearningCommand(params: {
   resolveStore: (ctx: { sessionKey?: string }) => LearningStore;
   learnCurrentConversation: (params: { sessionFile?: string }) => Promise<{ slug: string; state: string }>;
   learnFromFile: (params: { filePath: string }) => Promise<{ slug: string; state: string }>;
+  learnFromSessionScope?: (params: {
+    sessionFile?: string;
+    sessionKey?: string;
+    source:
+      | { kind: "current" | "last-task" }
+      | { kind: "recent-turns"; turnCount: number }
+      | { kind: "marked"; sessionKey: string };
+  }) => Promise<{ slug: string; state: string }>;
+  previewSessionScope?: (params: {
+    sessionFile?: string;
+    sessionKey?: string;
+    source:
+      | { kind: "current" | "last-task" }
+      | { kind: "recent-turns"; turnCount: number }
+      | { kind: "marked"; sessionKey: string };
+  }) => string;
 }): OpenClawPluginCommandDefinition {
   return {
     name: "selflearn",
@@ -237,16 +253,103 @@ export function createSelfLearningCommand(params: {
       }
 
       if (subcommand === "learn") {
+        const preview = rest.includes("--preview");
+        if (rest[0] === "--from" && (rest[1] === "current" || rest[1] === "last-task")) {
+          const source = { kind: rest[1] as "current" | "last-task" };
+          if (preview && params.previewSessionScope) {
+            return {
+              text: params.previewSessionScope({
+                sessionFile: ctx.sessionFile,
+                sessionKey: ctx.sessionKey,
+                source,
+              }),
+            };
+          }
+          if (params.learnFromSessionScope) {
+            const result = await params.learnFromSessionScope({
+              sessionFile: ctx.sessionFile,
+              sessionKey: ctx.sessionKey,
+              source,
+            });
+            return { text: `Created ${result.state} skill ${result.slug} from the ${rest[1]} scope.` };
+          }
+        }
         if (rest[0] === "--from" && rest[1] === "current") {
           const result = await params.learnCurrentConversation({ sessionFile: ctx.sessionFile });
           return { text: `Created ${result.state} skill ${result.slug} from the current conversation.` };
+        }
+        if (rest[0] === "--from" && rest[1] === "recent-turns" && rest[2]) {
+          const turnCount = Number.parseInt(rest[2], 10);
+          if (!Number.isFinite(turnCount) || turnCount <= 0) {
+            return { text: "Usage: /selflearn learn --from recent-turns <positive-integer>" };
+          }
+          if (preview && params.previewSessionScope) {
+            return {
+              text: params.previewSessionScope({
+                sessionFile: ctx.sessionFile,
+                sessionKey: ctx.sessionKey,
+                source: { kind: "recent-turns", turnCount },
+              }),
+            };
+          }
+          if (params.learnFromSessionScope) {
+            const result = await params.learnFromSessionScope({
+              sessionFile: ctx.sessionFile,
+              sessionKey: ctx.sessionKey,
+              source: { kind: "recent-turns", turnCount },
+            });
+            return { text: `Created ${result.state} skill ${result.slug} from the last ${turnCount} turns.` };
+          }
+        }
+        if (rest[0] === "--from" && rest[1] === "marked") {
+          if (preview && params.previewSessionScope) {
+            return {
+              text: params.previewSessionScope({
+                sessionFile: ctx.sessionFile,
+                sessionKey: ctx.sessionKey,
+                source: { kind: "marked", sessionKey: ctx.sessionKey ?? "" },
+              }),
+            };
+          }
+          if (params.learnFromSessionScope) {
+            const result = await params.learnFromSessionScope({
+              sessionFile: ctx.sessionFile,
+              sessionKey: ctx.sessionKey,
+              source: { kind: "marked", sessionKey: ctx.sessionKey ?? "" },
+            });
+            return { text: `Created ${result.state} skill ${result.slug} from the marked scope.` };
+          }
         }
         if (rest[0] === "--from" && rest[1] === "file" && rest[2]) {
           const filePath = resolveInputPath(rest[2]);
           const result = await params.learnFromFile({ filePath });
           return { text: `Created ${result.state} skill ${result.slug} from ${filePath}.` };
         }
-        return { text: "Usage: /selflearn learn --from current|file <path>" };
+        return { text: "Usage: /selflearn learn --from current|last-task|recent-turns <n>|marked|file <path> [--preview]" };
+      }
+
+      if (subcommand === "mark-start") {
+        if (!ctx.sessionFile || !ctx.sessionKey) {
+          return { text: "Current session transcript is not available." };
+        }
+        const marker = store.markSessionBoundary({
+          sessionFile: ctx.sessionFile,
+          sessionKey: ctx.sessionKey,
+          kind: "start",
+        });
+        return { text: `Marked learning scope start at transcript line ${marker.startLine ?? 0}.` };
+      }
+
+      if (subcommand === "mark-end") {
+        if (!ctx.sessionFile || !ctx.sessionKey) {
+          return { text: "Current session transcript is not available." };
+        }
+        const marker = store.markSessionBoundary({
+          sessionFile: ctx.sessionFile,
+          sessionKey: ctx.sessionKey,
+          kind: "end",
+        });
+        return { text: `Marked learning scope end at transcript line ${marker.endLine ?? 0}.` };
       }
 
       if (subcommand === "export") {
@@ -288,7 +391,12 @@ export function createSelfLearningCommand(params: {
           "/selflearn trace <trace-id>",
           "/selflearn show <skill-slug>",
           "/selflearn patches",
-          "/selflearn learn --from current",
+          "/selflearn mark-start",
+          "/selflearn mark-end",
+          "/selflearn learn --from current [--preview]",
+          "/selflearn learn --from last-task [--preview]",
+          "/selflearn learn --from recent-turns <n> [--preview]",
+          "/selflearn learn --from marked [--preview]",
           "/selflearn learn --from file <path>",
           "/selflearn revise <skill-slug> <feedback>",
           "/selflearn apply-patch <proposal-id>",

@@ -4,7 +4,12 @@ import path from "node:path";
 import { resolvePluginConfig } from "./config.js";
 import { createSelfLearningCommand } from "./commands/selflearn-command.js";
 import { createSelfLearningEngine } from "./context/selflearning-engine.js";
-import { learnCurrentConversation, learnFromFile } from "./review/user-requested-skill.js";
+import {
+  learnCurrentConversation,
+  learnFromFile,
+  learnFromSessionScope,
+  previewSessionScope,
+} from "./review/user-requested-skill.js";
 import { resolveAgentId } from "./runtime/agent-resolution.js";
 import { resolveLearningPaths } from "./runtime/paths.js";
 import { LearningStore } from "./store/learning-store.js";
@@ -110,6 +115,22 @@ export default definePluginEntry({
             filePath,
             runSilentReview: ({ prompt }) => runSilentReview({ prompt }),
             promotionConfig: config.promotion,
+          }),
+        learnFromSessionScope: ({ sessionFile, sessionKey, source }) =>
+          learnFromSessionScope({
+            store: storeResolver({ sessionKey }),
+            sessionFile,
+            sessionKey,
+            source,
+            runSilentReview: ({ prompt }) => runSilentReview({ prompt, sessionFile, sessionKey }),
+            promotionConfig: config.promotion,
+          }),
+        previewSessionScope: ({ sessionFile, sessionKey, source }) =>
+          previewSessionScope({
+            store: storeResolver({ sessionKey }),
+            sessionFile,
+            sessionKey,
+            source,
           }),
       }),
     );

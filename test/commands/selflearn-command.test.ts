@@ -64,6 +64,8 @@ describe("createSelfLearningCommand", () => {
       resolveStore: () => store,
       learnCurrentConversation: vi.fn(),
       learnFromFile: vi.fn(),
+      learnFromSessionScope: vi.fn(),
+      previewSessionScope: vi.fn(),
     });
 
     const result = await command.handler({
@@ -91,6 +93,8 @@ describe("createSelfLearningCommand", () => {
       resolveStore: () => store,
       learnCurrentConversation: vi.fn(),
       learnFromFile: vi.fn(),
+      learnFromSessionScope: vi.fn(),
+      previewSessionScope: vi.fn(),
     });
 
     const result = await command.handler(
@@ -118,6 +122,8 @@ describe("createSelfLearningCommand", () => {
       resolveStore: () => store,
       learnCurrentConversation: vi.fn(),
       learnFromFile: vi.fn(),
+      learnFromSessionScope: vi.fn(),
+      previewSessionScope: vi.fn(),
     });
 
     const result = await command.handler(
@@ -201,10 +207,16 @@ describe("createSelfLearningCommand", () => {
       slug: "customer-onboarding-checklist",
       state: "candidate",
     });
+    const learnFromSessionScope = vi.fn().mockResolvedValue({
+      slug: "customer-onboarding-checklist",
+      state: "candidate",
+    });
     const command = createSelfLearningCommand({
       resolveStore: () => store,
       learnCurrentConversation,
       learnFromFile: vi.fn(),
+      learnFromSessionScope,
+      previewSessionScope: vi.fn(),
     });
 
     const result = await command.handler({
@@ -215,8 +227,87 @@ describe("createSelfLearningCommand", () => {
       }),
     });
 
-    expect(learnCurrentConversation).toHaveBeenCalled();
+    expect(learnFromSessionScope).toHaveBeenCalledWith({
+      sessionFile: path.join(root, "session.jsonl"),
+      sessionKey: undefined,
+      source: { kind: "current" },
+    });
+    expect(learnCurrentConversation).not.toHaveBeenCalled();
     expect(result.text).toContain("customer-onboarding-checklist");
+  });
+
+  it("supports previewing a recent-turns learning scope", async () => {
+    const previewSessionScope = vi.fn().mockReturnValue("Learning scope preview\nsource: recent-turns:2");
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+      learnFromSessionScope: vi.fn(),
+      previewSessionScope,
+    });
+
+    const result = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn learn --from recent-turns 2 --preview",
+        args: "learn --from recent-turns 2 --preview",
+        sessionFile: path.join(root, "session.jsonl"),
+        sessionKey: "agent:main:test",
+      }),
+    );
+
+    expect(previewSessionScope).toHaveBeenCalledWith({
+      sessionFile: path.join(root, "session.jsonl"),
+      sessionKey: "agent:main:test",
+      source: { kind: "recent-turns", turnCount: 2 },
+    });
+    expect(result.text).toContain("Learning scope preview");
+  });
+
+  it("marks the current session scope boundaries", async () => {
+    const sessionFile = path.join(root, "session.jsonl");
+    fs.writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({ role: "user", content: "first" }),
+        JSON.stringify({ role: "assistant", content: "reply" }),
+      ].join("\n"),
+      "utf8",
+    );
+    const command = createSelfLearningCommand({
+      resolveStore: () => store,
+      learnCurrentConversation: vi.fn(),
+      learnFromFile: vi.fn(),
+      learnFromSessionScope: vi.fn(),
+      previewSessionScope: vi.fn(),
+    });
+
+    const startResult = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn mark-start",
+        args: "mark-start",
+        sessionFile,
+        sessionKey: "agent:main:test",
+      }),
+    );
+    expect(startResult.text).toContain("start");
+
+    fs.appendFileSync(
+      sessionFile,
+      "\n" + JSON.stringify({ role: "user", content: "second" }),
+      "utf8",
+    );
+
+    const endResult = await command.handler(
+      createCommandContext({
+        commandBody: "selflearn mark-end",
+        args: "mark-end",
+        sessionFile,
+        sessionKey: "agent:main:test",
+      }),
+    );
+    expect(endResult.text).toContain("end");
+    expect(store.getSessionMarkers("agent:main:test")?.startLine).toBe(2);
+    expect(store.getSessionMarkers("agent:main:test")?.endLine).toBe(3);
   });
 
   it("approves a candidate skill", async () => {

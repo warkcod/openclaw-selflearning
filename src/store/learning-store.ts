@@ -53,6 +53,34 @@ export class LearningStore {
     return this.paths;
   }
 
+  markSessionBoundary(params: {
+    sessionKey: string;
+    sessionFile: string;
+    kind: "start" | "end";
+  }) {
+    const markers = this.readMarkers();
+    const currentCount = fs.readFileSync(params.sessionFile, "utf8").split(/\r?\n/u).filter(Boolean).length;
+    const existing = markers[params.sessionKey] ?? {};
+    markers[params.sessionKey] =
+      params.kind === "start"
+        ? {
+            startLine: currentCount,
+            endLine: undefined,
+            updatedAt: new Date().toISOString(),
+          }
+        : {
+            ...existing,
+            endLine: currentCount,
+            updatedAt: new Date().toISOString(),
+          };
+    this.writeMarkers(markers);
+    return markers[params.sessionKey];
+  }
+
+  getSessionMarkers(sessionKey: string) {
+    return this.readMarkers()[sessionKey] ?? null;
+  }
+
   saveReview(params: {
     sessionId?: string;
     summary: string;
@@ -862,6 +890,25 @@ export class LearningStore {
 
   private writeState(state: LearningState) {
     fs.writeFileSync(this.paths.stateFile, JSON.stringify(state, null, 2), "utf8");
+  }
+
+  private markersFile() {
+    return path.join(this.paths.rootDir, "scope-markers.json");
+  }
+
+  private readMarkers(): Record<string, { startLine?: number; endLine?: number; updatedAt: string }> {
+    const file = this.markersFile();
+    if (!fs.existsSync(file)) {
+      return {};
+    }
+    return JSON.parse(fs.readFileSync(file, "utf8")) as Record<
+      string,
+      { startLine?: number; endLine?: number; updatedAt: string }
+    >;
+  }
+
+  private writeMarkers(value: Record<string, { startLine?: number; endLine?: number; updatedAt: string }>) {
+    fs.writeFileSync(this.markersFile(), JSON.stringify(value, null, 2), "utf8");
   }
 }
 

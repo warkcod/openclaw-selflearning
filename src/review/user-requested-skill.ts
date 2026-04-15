@@ -3,6 +3,7 @@ import type { PromotionConfig } from "../types.js";
 import { applyReviewResult } from "../growth/candidate-writer.js";
 import { buildExplicitSkillLearningPrompt } from "./review-prompt.js";
 import { runReviewWorker } from "./review-worker.js";
+import { buildSessionScope, formatScopePreview, type SessionScopeSource } from "./session-scope.js";
 import { LearningStore } from "../store/learning-store.js";
 
 export async function learnCurrentConversation(params: {
@@ -14,7 +15,10 @@ export async function learnCurrentConversation(params: {
   if (!params.sessionFile || !fs.existsSync(params.sessionFile)) {
     throw new Error("Current session transcript is not available.");
   }
-  const transcript = summarizeSessionFile(params.sessionFile);
+  const transcript = buildSessionScope({
+    sessionFile: params.sessionFile,
+    source: { kind: "current" },
+  }).sourceText;
   return learnFromSource({
     store: params.store,
     sourceLabel: `current session: ${params.sessionFile}`,
@@ -92,17 +96,66 @@ async function learnFromSource(params: {
   };
 }
 
-function summarizeSessionFile(sessionFile: string) {
-  const lines = fs.readFileSync(sessionFile, "utf8").split(/\r?\n/u).filter(Boolean);
-  return lines
-    .slice(-40)
-    .map((line) => {
-      try {
-        const parsed = JSON.parse(line) as { role?: string; content?: string };
-        return `${parsed.role ?? "unknown"} ${String(parsed.content ?? "")}`.trim();
-      } catch {
-        return line.trim();
-      }
-    })
-    .join("\n");
+export async function learnFromSessionScope(params: {
+  store: LearningStore;
+  sessionFile?: string;
+  sessionKey?: string;
+  source: SessionScopeSource;
+  runSilentReview: (params: { prompt: string }) => Promise<{ text: string }>;
+  promotionConfig: PromotionConfig;
+}) {
+  if (!params.sessionFile) {
+    throw new Error("Current session transcript is not available.");
+  }
+  const scope = buildSessionScope({
+    sessionFile: params.sessionFile,
+    source: params.source,
+    markers:
+      params.source.kind === "marked" && params.sessionKey
+        ? params.store.getSessionMarkers(params.sessionKey)
+        : undefined,
+  });
+  return learnFromSource({
+    store: params.store,
+    sourceLabel: scope.sourceLabel,
+    sourceText: scope.sourceText,
+    runSilentReview: params.runSilentReview,
+    promotionConfig: params.promotionConfig,
+  });
+}
+
+export function previewSessionScope(params: {
+  store: LearningStore;
+  sessionFile?: string;
+  sessionKey?: string;
+  source: SessionScopeSource;
+}) {
+  if (!params.sessionFile) {
+    throw new Error("Current session transcript is not available.");
+  }
+  const scope = buildSessionScope({
+    sessionFile: params.sessionFile,
+    source: params.source,
+    markers:
+      params.source.kind === "marked" && params.sessionKey
+        ? params.store.getSessionMarkers(params.sessionKey)
+        : undefined,
+  });
+  return formatScopePreview(scope);
+}
+
+export function markSessionBoundary(params: {
+  store: LearningStore;
+  sessionFile?: string;
+  sessionKey?: string;
+  kind: "start" | "end";
+}) {
+  if (!params.sessionFile || !params.sessionKey) {
+    throw new Error("Current session transcript is not available.");
+  }
+  return params.store.markSessionBoundary({
+    sessionFile: params.sessionFile,
+    sessionKey: params.sessionKey,
+    kind: params.kind,
+  });
 }
