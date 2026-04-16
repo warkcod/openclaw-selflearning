@@ -5,6 +5,14 @@
   "type": "module",
   "license": "Apache-2.0",
   "private": false,
+  "homepage": "https://github.com/warkcod/openclaw-selflearning#readme",
+  "bugs": {
+    "url": "https://github.com/warkcod/openclaw-selflearning/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/warkcod/openclaw-selflearning.git"
+  },
   "main": "./dist/src/index.js",
   "exports": {
     ".": "./dist/src/index.js"

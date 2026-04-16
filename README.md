@@ -1,5 +1,9 @@
 # OpenClaw Self-Learning
 
+[![CI](https://github.com/warkcod/openclaw-selflearning/actions/workflows/ci.yml/badge.svg)](https://github.com/warkcod/openclaw-selflearning/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/warkcod/openclaw-selflearning)](LICENSE)
+[![OpenClaw](https://img.shields.io/badge/OpenClaw-plugin-blue)](https://github.com/openclaw/openclaw)
+
 `openclaw-selflearning` is an OpenClaw extension that turns completed work into reusable assets.
 
 It borrows the strongest ideas from learning-loop plugins and Hermes-style self-improvement systems:
@@ -144,3 +148,8 @@ See [SECURITY.md](SECURITY.md).
 ## License
 
 This project is licensed under [Apache-2.0](LICENSE).
+
+## Links
+
+- Repository: https://github.com/warkcod/openclaw-selflearning
+- Issues: https://github.com/warkcod/openclaw-selflearning/issues
